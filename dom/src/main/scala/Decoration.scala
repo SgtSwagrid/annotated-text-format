@@ -106,10 +106,20 @@ final class Decoration[A] private (
     .toList
 
   /** The annotations shown in the element of the page that `node` is within. */
-  def at(node: dom.Node): List[Int] = placed
-    .find(_.element.contains(node))
+  def at(node: dom.Node): List[Int] = placedAt(node)
     .toList
     .flatMap(_.piece.annotations.filter(isShown).toList.sorted)
+
+  /**
+    * The highlighted element of the page that `node` is within, if any
+    * annotation is shown there, as a tooltip is anchored to.
+    */
+  def elementAt(node: dom.Node): Option[dom.Element] = placedAt(node)
+    .filter(_.piece.annotations.exists(isShown))
+    .map(_.styled)
+
+  private def placedAt(node: dom.Node): Option[Placed[A]] =
+    placed.find(_.element.contains(node))
 
   /**
     * Takes every annotation out of the page, putting back the text that each

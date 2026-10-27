@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "The packages that the tests use: jsdom gives the DOM module's tests a document.",
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  }
+}

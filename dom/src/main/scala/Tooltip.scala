@@ -67,24 +67,28 @@ final class Tooltip private (
     */
   def show(content: dom.Node, line: Box): Tooltip.Showing =
     val showing = next()
-    start(showing, content, line)
+    start(showing, content, line, None)
     showing
 
   /** A showing to come, which shows nothing until it is started. */
   private[dom] def next(): Tooltip.Showing = new Tooltip.Showing(this)
 
-  /** Shows `content` for `line` as `showing`. */
+  /**
+    * Shows `content` for `line` as `showing`, as for `near`, if anything, in
+    * the modal dialog that holds it, if any.
+    */
   private[dom] def start
     (
       showing: Tooltip.Showing,
       content: dom.Node,
       line: Box,
+      near: Option[dom.Node],
     )
     : Unit =
     fill(content)
     this.line = Some(line)
     current = Some(showing)
-    open()
+    open(near)
     fit()
 
   /** Places it for `line`, as after the line has moved, if it is open. */
@@ -111,8 +115,8 @@ final class Tooltip private (
     body.appendChild(content)
 
   /** Puts it in the top layer, if it is not there. */
-  private def open(): Unit =
-    val container = Tooltip.container(host.ownerDocument)
+  private def open(near: Option[dom.Node]): Unit =
+    val container = Tooltip.container(host.ownerDocument, near)
     if !(host.parentNode eq container) then container.appendChild(host)
     host.removeAttribute("hidden")
     Tooltip
@@ -184,7 +188,7 @@ object Tooltip:
         js.Dynamic.literal(mode = if closed then "closed" else "open"),
       )
     made += 1
-    host.id = s"$tag-$made"
+    host.id = s"$tag-$bundle-$made"
     host.setAttribute(
       "role",
       if interactive then "dialog" else "tooltip",
@@ -211,15 +215,41 @@ object Tooltip:
   private var made = 0
 
   /**
-    * Where a tooltip of `document` goes: in the modal dialog open, topmost,
-    * outside which all is inert, or else at its root.
+    * A part of each `id` drawn at random, so that tooltips made by two scripts
+    * in one page, each with this library, are told apart.
     */
-  private def container(document: dom.Document): dom.Node =
+  private val bundle = java
+    .lang
+    .Long
+    .toString((math.random() * 1e12).toLong, 36)
+
+  /**
+    * Where a tooltip of `document` goes: in the modal dialog open that holds
+    * `near`, or else the last open, outside which all is inert; or else at its
+    * root.
+    */
+  private def container
+    (
+      document: dom.Document,
+      near: Option[dom.Node],
+    )
+    : dom.Node =
+    def modal(element: dom.Element): Option[dom.Element] =
+      try Option(element.closest("dialog:modal"))
+      catch case _: js.JavaScriptException => None
+    val holding = near
+      .map(node =>
+        if node.nodeType == Passage.elementNode then node else node.parentNode,
+      )
+      .filter(_ != null)
+      .flatMap(node => modal(node.asInstanceOf[dom.Element]))
     val modals =
       try document.querySelectorAll("dialog:modal")
       catch case _: js.JavaScriptException => null
-    if modals == null || modals.length == 0 then document.documentElement
-    else modals(modals.length - 1)
+    holding.getOrElse(
+      if modals == null || modals.length == 0 then document.documentElement
+      else modals(modals.length - 1),
+    )
 
   /**
     * Styles what is within `root` by `sheets`, adopting them where the browser

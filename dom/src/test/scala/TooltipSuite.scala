@@ -475,3 +475,35 @@ class TooltipSuite extends FunSuite:
     Jsdom.press(document, "Escape")
     assert(!tooltip.isOpen)
     hovering.stop()
+
+  test("Focus on a word whose tooltip is open keeps that showing"):
+    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
+    val document   = paragraph.ownerDocument
+    val decoration = decorated(paragraph, List(Span(4, 9)))
+    val tooltip    = Tooltip(document)
+    var showings   = List.empty[Tooltip.Showing]
+    val hovering   = Hovering[String](
+      tooltip,
+      (_, showing) =>
+        showings :+= showing
+        Some(text(document, "get up"))
+      ,
+      focusable = true,
+    )
+    hovering.add(decoration)
+    val element = decoration.elements(0).head
+    element.setAttribute("aria-describedby", "note-3")
+    Jsdom.move(element.firstChild, 0, 0)
+    assertEquals(
+      element.getAttribute("aria-describedby"),
+      s"note-3 ${ tooltip.id }",
+    )
+    element.asInstanceOf[dom.HTMLElement].focus()
+    assertEquals(showings.size, 1)
+    assert(showings.head.update(text(document, "aufstehen")))
+    Jsdom.press(document, "Escape")
+    assertEquals(
+      element.getAttribute("aria-describedby"),
+      "note-3",
+    )
+    hovering.stop()

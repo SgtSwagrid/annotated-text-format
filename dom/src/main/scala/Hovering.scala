@@ -114,6 +114,7 @@ final class Hovering[A] private (
 
   /** Covers `decoration` too, its annotations taking the focus if `focusable`. */
   def add(decoration: Decoration[A]): Unit =
+    covered.keys.filterNot(present).toList.foreach(remove)
     if !covered.contains(decoration) then
       decoration.outermost.foreach(decorations.update(_, decoration))
       val stops =
@@ -144,6 +145,14 @@ final class Hovering[A] private (
         )
       then hide(),
     )
+
+  /**
+    * Whether any of `decoration` is still in the page, as it is not once it is
+    * restored.
+    */
+  private def present(decoration: Decoration[A]): Boolean = decoration
+    .outermost
+    .exists(_.isConnected)
 
   /** Covers no decoration. */
   def clear(): Unit = covered.keys.toList.foreach(remove)
@@ -242,12 +251,14 @@ final class Hovering[A] private (
       found(node)
         .filter(_._2 eq node)
         .foreach((decoration, element) =>
-          open(
-            decoration,
-            element,
-            firstLine(element),
-            byFocus = true,
-          ),
+          if isShown(element) then focused = true
+          else
+            open(
+              decoration,
+              element,
+              firstLine(element),
+              byFocus = true,
+            ),
         )
 
   /**
@@ -275,8 +286,8 @@ final class Hovering[A] private (
           Box.lines(element).indexOf(line),
         ))
         focused = byFocus
-        tooltip.start(showing, node, line)
-        element.setAttribute("aria-describedby", tooltip.id)
+        tooltip.start(showing, node, line, Some(element))
+        describe(element)
         true
       case None => false
 
@@ -431,8 +442,25 @@ final class Hovering[A] private (
     .relatedTarget == null
 
   /** Stops describing the element the tooltip was for by it. */
-  private def undescribe(): Unit =
-    shown.foreach(_.element.removeAttribute("aria-describedby"))
+  private def undescribe(): Unit = shown.foreach(shown =>
+    val rest = described(shown.element).filterNot(_ == tooltip.id)
+    if rest.isEmpty then shown.element.removeAttribute("aria-describedby")
+    else shown.element.setAttribute("aria-describedby", rest.mkString(" ")),
+  )
+
+  /** Describes `element` by the tooltip too, as well as by what it was. */
+  private def describe(element: dom.Element): Unit =
+    val ids = described(element)
+    if !ids.contains(tooltip.id) then
+      element.setAttribute(
+        "aria-describedby",
+        (ids :+ tooltip.id).mkString(" "),
+      )
+
+  /** The `id`s of what describes `element`. */
+  private def described(element: dom.Element): List[String] = Option(
+    element.getAttribute("aria-describedby"),
+  ).toList.flatMap(_.split(" ").toList).filter(_.nonEmpty)
 
   private def hide(): Unit =
     undescribe()

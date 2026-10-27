@@ -19,7 +19,7 @@ _Annotated Text Format_ comes in three parts, each an artefact of its own:
 | -------- | ------------- |
 | `annotated-text-format` | The format itself: `AnnotatedText[A]`, a text with annotations, each attaching a value of type `A` to one or more of its spans; their validation, circe codecs and JSON Schema. |
 | `annotated-text-format-llm` | The interface to large language models: annotations quoted as a model writes them, what to tell the model, the schema of its reply, and anchoring its quotes to the text. |
-| `annotated-text-format-dom` | Rendering in a page: annotations highlighted in the page's own text, shown and hidden, and taken out again, leaving the page as it was. |
+| `annotated-text-format-dom` | Rendering in a page: annotations highlighted in the page's own text, shown and hidden, and taken out again, leaving the page as it was; and a tooltip for them, opened by the pointer, a tap or the keyboard. |
 
 Add whichever you need to your `build.sbt`:
 

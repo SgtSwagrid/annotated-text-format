@@ -106,10 +106,23 @@ final class Decoration[A] private (
     .toList
 
   /** The annotations shown in the element of the page that `node` is within. */
-  def at(node: dom.Node): List[Int] = placed
-    .find(_.element.contains(node))
+  def at(node: dom.Node): List[Int] = placedAt(node)
     .toList
     .flatMap(_.piece.annotations.filter(isShown).toList.sorted)
+
+  /**
+    * The highlighted element of the page that `node` is within, if any
+    * annotation is shown there, as a tooltip is anchored to.
+    */
+  def elementAt(node: dom.Node): Option[dom.Element] = placedAt(node)
+    .filter(_.piece.annotations.exists(isShown))
+    .map(_.styled)
+
+  private def placedAt(node: dom.Node): Option[Placed[A]] =
+    placed.find(_.element.contains(node))
+
+  /** The outermost element in the page of each piece that it placed there. */
+  private[dom] def outermost: Vector[dom.Element] = placed.map(_.element)
 
   /**
     * Takes every annotation out of the page, putting back the text that each
@@ -123,6 +136,9 @@ final class Decoration[A] private (
 
   /** Whether it has been taken out of the page, after which it does nothing. */
   private var taken = false
+
+  /** Whether it has been taken out of the page. */
+  private[dom] def isRestored: Boolean = taken
 
   /**
     * Where the text nodes that `root` was split into lie: beneath it, or, if it
@@ -305,7 +321,7 @@ private object Forcing:
     val sheet = document(root).createElement("style")
     sheet.id = id(prefix)
     sheet.textContent =
-      s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } }"
+      s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } } .$prefix:focus-visible { outline: 2px solid; outline-offset: 1px; }"
     container.appendChild(sheet)
     sheet
 

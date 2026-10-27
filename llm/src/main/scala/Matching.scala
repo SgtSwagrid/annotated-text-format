@@ -9,9 +9,13 @@ import java.util.regex.{Matcher, Pattern}
   * quoted first, and only then as loosely as this allows.
   *
   * Letters are matched in either case by folding each character to lower case,
-  * alike on the JVM and in JavaScript; so `"kiz"` never matches `"kız"`. Text
-  * is not normalised, so a letter written with a combining accent does not
-  * match one written as a single character.
+  * alike on the JVM and in JavaScript; so `"kiz"` never matches `"kız"`, and
+  * neither does `"σ"` match `"ς"`, the final sigma. Text is not normalised, so
+  * a letter written with a combining accent does not match one written as a
+  * single character. Since a quote as written is sought before a looser match,
+  * an exact match further on is preferred to a nearer loose one: a straight
+  * `don't` quoted for a curly `don’t` is placed on a later straight one, if
+  * there is one.
   *
   * @param anyCase
   *   Whether letters match in either case.
@@ -409,7 +413,7 @@ private object Token:
     * spaces that do not break lines, which web pages hold, but Java's `\s` does
     * not match.
     */
-  val whitespace: String = """[\s   ]"""
+  val whitespace: String = """[\s\u00a0\u2007\u202f]"""
 
   private val marks: Set[Int] = Set(
     Character.NON_SPACING_MARK,

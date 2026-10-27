@@ -5,6 +5,7 @@ import com.alecdorrington.annotatedtextformat.{
 }
 import munit.FunSuite
 import org.scalajs.dom
+import scala.scalajs.js
 
 class DecorationSuite extends FunSuite:
 
@@ -450,3 +451,103 @@ class DecorationSuite extends FunSuite:
       ),
       Left(Problem.OtherText),
     )
+
+  test("Hiding one annotation leaves lit an element that another still lights"):
+    val paragraph  = Jsdom.element("<p>a b c</p>")
+    val decoration = decorate(
+      paragraph,
+      kept,
+      Annotation(Span(0, 3), "x"),
+      Annotation(Span(2, 5), "y"),
+    )
+    Jsdom.send(
+      paragraph.querySelectorAll(".atf")(1),
+      "mouseenter",
+    )
+    decoration.hide(0)
+    assertEquals(
+      texts(paragraph, "atf-lit"),
+      List("b", " c"),
+    )
+
+  test("Redrawing draws what the look gives now"):
+    var shaded = false
+    val look   = Look[String](
+      _ => Colour("teal"),
+      beneath = _ =>
+        if shaded then
+          List(Style.Layer(
+            Style.fill(Colour("grey")),
+            "100% 100%",
+            "0 0",
+          ))
+        else Nil,
+    )
+    val paragraph  = Jsdom.element("<p>She is late.</p>")
+    val decoration = decorate(
+      paragraph,
+      look,
+      Annotation(Span(7, 11), "late"),
+    )
+    def image = paragraph
+      .querySelector(".atf")
+      .asInstanceOf[dom.HTMLElement]
+      .style
+      .getPropertyValue("background-image")
+    assert(!image.contains("grey"))
+    shaded = true
+    decoration.redraw()
+    assert(image.contains("grey"))
+
+  test("The stylesheet for forced colours goes once no decoration uses it"):
+    val both = Jsdom.element("<div><p>She is late.</p><p>He is too.</p></div>")
+    val document = both.ownerDocument
+    val first    = decorate(
+      both.firstElementChild,
+      kept,
+      Annotation(Span(7, 11), "late"),
+    )
+    val second = decorate(
+      both.lastElementChild,
+      kept,
+      Annotation(Span(3, 5), "is"),
+    )
+    def sheets = document.querySelectorAll("#atf-forced-colours").length
+    assertEquals(sheets, 1)
+    first.restore()
+    assertEquals(sheets, 1)
+    second.restore()
+    assertEquals(sheets, 0)
+
+  test("Within a shadow root, the stylesheet for forced colours goes there"):
+    val host   = Jsdom.element("<div></div>")
+    val shadow = host
+      .asInstanceOf[js.Dynamic]
+      .attachShadow(js.Dynamic.literal(mode = "open"))
+    val inner = host.ownerDocument.createElement("p")
+    inner.textContent = "She is late."
+    shadow.appendChild(inner)
+    decorate(
+      inner,
+      kept,
+      Annotation(Span(7, 11), "late"),
+    )
+    assertEquals(
+      shadow.querySelectorAll("#atf-forced-colours").length.asInstanceOf[Int],
+      1,
+    )
+    assertEquals(
+      host.ownerDocument.querySelectorAll("#atf-forced-colours").length,
+      0,
+    )
+
+  test("A prefix that could not be a class's name is the default"):
+    val paragraph = Jsdom.element("<p>She is late.</p>")
+    val passage   = Passage(paragraph)
+    Decorator.decorate(
+      passage,
+      passage.annotate(List(Annotation(Span(7, 11), "late"))).toOption.get,
+      kept,
+      "my.notes",
+    )
+    assertEquals(texts(paragraph, "atf"), List("late"))

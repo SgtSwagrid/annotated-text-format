@@ -74,14 +74,14 @@ object Passage:
   val decorated: String = "data-annotated-text"
 
   /**
-    * The passage beneath `root`, in which the elements that `skip` holds for,
-    * by default those that are [[nonProse]], and those of decorations, are not
-    * prose.
+    * The passage beneath `root`, in which the elements that are [[nonProse]],
+    * those that `skip` holds for too, as code may be, and those of decorations,
+    * are not prose.
     */
   def apply
     (
       root: dom.Node,
-      skip: dom.Element => Boolean = nonProse,
+      skip: dom.Element => Boolean = _ => false,
     )
     : Passage = new Passage(root, partsOf(root, skip).toVector)
 
@@ -100,15 +100,16 @@ object Passage:
       case Break       => "\n"
 
   /**
-    * The parts beneath `root`, a break standing between blocks, but none at
-    * either end, nor two together.
+    * The parts beneath `root`, or of it, if it is a text node itself, a break
+    * standing between blocks, but none at either end, nor two together.
     */
   private def partsOf
     (
       root: dom.Node,
       skip: dom.Element => Boolean,
     )
-    : List[Part] = children(root)
+    : List[Part] = (if root.nodeType == textNode then List(root)
+                    else children(root))
     .flatMap(within(_, skip))
     .foldLeft(List.empty[Part]):
       case (Part.Break :: rest, Part.Break) => Part.Break :: rest
@@ -192,8 +193,8 @@ object Passage:
   )
 
   /**
-    * Whether `element` holds no prose, as a script, a style or a field to fill
-    * in does, which a passage leaves out by default.
+    * Whether `element` holds no prose, as a script, a style, a field to fill in
+    * or a document's head does, which a passage always leaves out.
     */
   val nonProse: dom.Element => Boolean =
     element => unread.contains(name(element))
@@ -203,6 +204,7 @@ object Passage:
     "canvas",
     "datalist",
     "embed",
+    "head",
     "iframe",
     "input",
     "math",
@@ -223,7 +225,8 @@ object Passage:
       element: dom.Element,
       skip: dom.Element => Boolean,
     )
-    : Boolean = element.hasAttribute(decorated) || skip(element)
+    : Boolean = element.hasAttribute(decorated) || nonProse(element) ||
+    skip(element)
 
   /** The children of `node`, in order. */
   private[dom] def children(node: dom.Node): List[dom.Node] =
@@ -235,3 +238,4 @@ object Passage:
   private[dom] val elementNode  = 1
   private[dom] val textNode     = 3
   private[dom] val documentNode = 9
+  private[dom] val fragmentNode = 11

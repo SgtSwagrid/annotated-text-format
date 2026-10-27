@@ -34,3 +34,25 @@ class ColourSuite extends FunSuite:
     val colour = Colour("red,red),url(https://x/t),linear-gradient(red")
     assertEquals(colour.css, "currentcolor")
     assert(!Style.of(List(colour -> 0)).exists(_._2.contains("url(")))
+
+  test("Only the named colours of CSS are names"):
+    assertEquals(Colour("bogus").css, "currentcolor")
+    assertEquals(
+      Colour("RebeccaPurple").css,
+      "RebeccaPurple",
+    )
+    assertEquals(
+      Colour("transparent").css,
+      "transparent",
+    )
+
+  test("A colour's function holds only numbers, with units or none"):
+    assertEquals(
+      Colour.parse("oklch(70% 0.1 200deg / none)").map(_.css),
+      Some("oklch(70% 0.1 200deg / none)"),
+    )
+    assertEquals(
+      Colour.parse("rgb(from red r g b)"),
+      None,
+    )
+    assertEquals(Colour.parse("rgb(1 2 three)"), None)

@@ -2,7 +2,7 @@
   "private": true,
   "description": "The packages that the tests use: jsdom gives the DOM module's tests a document.",
   "engines": {
-    "node": ">=20.16"
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
   "devDependencies": {
     "jsdom": "29.1.1"

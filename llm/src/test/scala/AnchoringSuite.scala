@@ -278,3 +278,59 @@ class AnchoringSuite extends FunSuite:
       quoted.map(_.value),
       sorted.map(_.value),
     )
+
+  test(
+    "A passage quoted with words around it is found after the one before, though they begin before it",
+  ):
+    assertEquals(
+      spans(
+        "the big dog and the big dog",
+        "big",
+        "the big ⟦dog⟧",
+      ),
+      List(List(Span(4, 7)), List(Span(8, 11))),
+    )
+    assertEquals(
+      spans(
+        "She is late. He is late too.",
+        "late",
+        "is ‸late",
+      ),
+      List(List(Span(7, 11)), List(Span.point(7))),
+    )
+
+  test("Adjacent parts may both have words around them, which may overlap"):
+    assertEquals(
+      spans(
+        "She always is late, and she always is late.",
+        "she ⟦always⟧ is … is ‸late.",
+      ),
+      List(List(Span(28, 34), Span.point(38))),
+    )
+
+  test(
+    "Every word, and every word with a point after the next, quotes back to where it is",
+  ):
+    val text  = "the cat and the dog, and the cat sat on the mat by the cat."
+    val words = """\S+"""
+      .r
+      .findAllMatchIn(text)
+      .map(found => Span(found.start, found.end))
+      .toList
+    val annotations = words.map(Annotation(_, ())) ++
+      words
+        .zip(words.drop(2))
+        .map((word, later) =>
+          Annotation(List(word, Span.point(later.start)), ()),
+        )
+    annotations.foreach(annotation =>
+      val annotated = AnnotatedText.of(text, List(annotation)).toOption.get
+      assertEquals(
+        Anchoring
+          .anchor(text, Anchoring.quote(annotated))
+          .annotated
+          .annotations,
+        List(annotation),
+        annotation,
+      ),
+    )

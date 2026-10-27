@@ -57,7 +57,7 @@ object Quoted:
        |Where other words split a passage, as they may a separable verb, quote its parts in order, joined by "${ separator
         .trim }" with a space either side, as in "stehe${ separator }auf".
        |To mark a point between two characters, as where words belong, quote a word or two around it with "$caret" at the point, as in "is ${ caret }late"; those words are not themselves annotated.
-       |Where a passage could be taken for the same words elsewhere, quote a word or two around it too, and mark the passage itself with "$open" and "$close", as in "the ${ open }cat$close sat"."""
+       |Where a passage could be taken for the same words elsewhere, quote a word or two around it too, and mark the passage itself with "$open" and "$close", as in "the ${ open }cat$close sat". A part may hold a point or a marked passage, but not both."""
       .stripMargin
 
   /**

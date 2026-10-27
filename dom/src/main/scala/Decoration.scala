@@ -2,6 +2,7 @@ package com.alecdorrington.annotatedtextformat.dom
 
 import com.alecdorrington.annotatedtextformat.{AnnotatedText, Problem}
 import org.scalajs.dom
+import scala.scalajs.js
 
 /**
   * Puts annotations into the page itself, in the text of a [[Passage]], as a
@@ -30,9 +31,16 @@ object Decorator:
     )
     : Either[Problem, Decoration[A]] = Either.cond(
     annotated.text == passage.text,
-    Decoration.make(passage, annotated, look, prefix),
+    Decoration.make(passage, annotated, look, name(prefix)),
     Problem.OtherText,
   )
+
+  /**
+    * `prefix`, if it may begin a class's name as it is, unescaped in a
+    * selector; or else the default, `atf`.
+    */
+  private def name(prefix: String): String =
+    if """[a-zA-Z_][a-zA-Z0-9_-]*""".r.matches(prefix) then prefix else "atf"
 
 /**
   * The annotations of `annotated`, put in the page in a passage, which may be
@@ -50,6 +58,9 @@ final class Decoration[A] private (
 
   private var hidden = Set.empty[Int]
 
+  /** The annotations lit, as the pointer is over one of their elements. */
+  private var lit = Set.empty[Int]
+
   /** Whether the annotation at `annotation` is shown. */
   def isShown(annotation: Int): Boolean = !hidden.contains(annotation)
 
@@ -61,11 +72,16 @@ final class Decoration[A] private (
 
   private def change(now: Set[Int], annotation: Int): Unit =
     hidden = now
+    lit = lit.filter(isShown)
     concerning(Set(annotation)).foreach(refresh)
-    if !isShown(annotation) then
-      concerning(
-        Set(annotation),
-      ).foreach(_.styled.classList.remove(s"$prefix-lit"))
+    glow()
+
+  /**
+    * Draws every annotation again, as after what `look` gives for them has
+    * changed, as the layers drawn beneath them may follow an application's own
+    * state.
+    */
+  def redraw(): Unit = placed.foreach(refresh)
 
   /** The elements in the page of the annotation at `annotation`. */
   def elements(annotation: Int): List[dom.Element] = concerning(Set(annotation))
@@ -85,6 +101,7 @@ final class Decoration[A] private (
   def restore(): Unit =
     placed.foreach(unplace)
     Origins.join(passage.root, origins)
+    Forcing.release(passage.root, prefix)
 
   private def unplace(each: Placed[A]): Unit = Option(each.element.parentNode)
     .foreach(parent =>
@@ -149,9 +166,22 @@ final class Decoration[A] private (
       )
 
   /** Lights every element of the annotations of `each`, or puts them out. */
-  private def light(each: Placed[A], on: Boolean): Unit = concerning(
-    each.piece.annotations.filter(isShown),
-  ).foreach(_.styled.classList.toggle(s"$prefix-lit", on))
+  /** Lights the annotations of `each`, or puts them out. */
+  private def light(each: Placed[A], on: Boolean): Unit =
+    val annotations = each.piece.annotations.filter(isShown)
+    lit = if on then lit ++ annotations else lit -- annotations
+    glow()
+
+  /** Marks as lit every element of an annotation lit, and only those. */
+  private def glow(): Unit = placed.foreach(each =>
+    each
+      .styled
+      .classList
+      .toggle(
+        s"$prefix-lit",
+        each.piece.annotations.exists(lit),
+      ),
+  )
 
   private def listen(each: Placed[A]): Unit =
     each
@@ -195,24 +225,73 @@ private object Decoration:
     )
     placed.foreach(decoration.refresh)
     placed.foreach(decoration.listen)
-    forcing(passage.document, prefix)
+    Forcing.use(passage.root, prefix)
     decoration
 
-  /**
-    * Underlines the text of every element highlighted with `prefix` in
-    * `document` where the system forces its own colours, which takes away their
-    * backgrounds and so their highlights, by a stylesheet put in once.
-    */
-  private def forcing(document: dom.Document, prefix: String): Unit =
-    val id = s"$prefix-forced-colours"
-    if document.getElementById(id) == null then
-      val style = document.createElement("style")
-      style.id = id
-      style.textContent =
-        s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } }"
-      Option(document.querySelector("head"))
-        .getOrElse(document.documentElement)
-        .appendChild(style)
+/**
+  * The stylesheet underlining the text of every element highlighted with a
+  * prefix where the system forces its own colours, which takes away their
+  * backgrounds and so their highlights: put in, once for each prefix, where the
+  * passage is, in its shadow root if it is in one, or else in its document's
+  * head, and taken out once no decoration uses it. A page whose policy forbids
+  * styles of its own goes without it.
+  */
+private object Forcing:
+
+  def use(root: dom.Node, prefix: String): Unit =
+    val container = containerOf(root)
+    val sheet     =
+      sheetIn(container, prefix).getOrElse(made(root, container, prefix))
+    sheet.setAttribute("data-uses", (uses(sheet) + 1).toString)
+
+  def release(root: dom.Node, prefix: String): Unit =
+    sheetIn(containerOf(root), prefix).foreach(sheet =>
+      if uses(sheet) <= 1 then
+        Option(sheet.parentNode).foreach(_.removeChild(sheet))
+      else sheet.setAttribute("data-uses", (uses(sheet) - 1).toString),
+    )
+
+  /** The sheet of `prefix` in `container`, if it is there. */
+  private def sheetIn
+    (container: dom.Node, prefix: String)
+    : Option[dom.Element] = Option(
+    container
+      .asInstanceOf[js.Dynamic]
+      .querySelector(s"#${ id(prefix) }")
+      .asInstanceOf[dom.Element],
+  )
+
+  private def made
+    (
+      root: dom.Node,
+      container: dom.Node,
+      prefix: String,
+    )
+    : dom.Element =
+    val sheet = document(root).createElement("style")
+    sheet.id = id(prefix)
+    sheet.textContent =
+      s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } }"
+    container.appendChild(sheet)
+    sheet
+
+  private def uses(sheet: dom.Element): Int =
+    Option(sheet.getAttribute("data-uses")).flatMap(_.toIntOption).getOrElse(0)
+
+  private def id(prefix: String): String = s"$prefix-forced-colours"
+
+  /** Where the sheet goes: the shadow root that `root` is in, or else the head. */
+  private def containerOf(root: dom.Node): dom.Node =
+    val top = root.asInstanceOf[js.Dynamic].getRootNode().asInstanceOf[dom.Node]
+    if top.nodeType == Passage.fragmentNode then top
+    else
+      val page = document(root)
+      Option(page.querySelector("head")).getOrElse(page.documentElement)
+
+  private def document(root: dom.Node): dom.Document =
+    if root.nodeType == Passage.documentNode then
+      root.asInstanceOf[dom.Document]
+    else root.ownerDocument
 
 /**
   * A piece put in the page: its `element` there, the one within it that is

@@ -3,6 +3,7 @@ package com.alecdorrington.annotatedtextformat.llm
 import com.alecdorrington.annotatedtextformat.{
   AnnotatedText, Annotation, Problem, Span,
 }
+import scala.collection.mutable
 
 /**
   * Quoted annotations anchored to a text: those found, as `annotated`, and
@@ -142,9 +143,7 @@ private final case class Quoting(text: String):
         ),
       )
       .distinct
-    quotes
-      .find(quoted => search.next(quoted, 0).placed.contains(annotation.spans))
-      .getOrElse(quotes.last)
+    quotes.find(search.placesBack(_, annotation.spans)).getOrElse(quotes.last)
 
   private def quote(annotation: Annotation[?], context: Int): String =
     annotation.spans.map(part(_, context)).mkString(Quoted.separator)
@@ -231,8 +230,10 @@ private final case class Search[A]
       case Left(reason) =>
         copy(unplaced = unplaced :+ Unplaced(index, quoted, reason))
 
-  /** The spans of the annotation it last placed. */
-  def placed: Option[List[Span]] = found.lastOption.map(_.spans)
+  /** Whether `quoted`, placed next, is placed at `spans`. */
+  def placesBack(quoted: Quoted[A], spans: List[Span]): Boolean =
+    val next = this.next(quoted, unplaced.size + found.size)
+    next.found.size > found.size && next.found.last.spans == spans
 
   def anchored: Anchored[A] = Anchored(
     AnnotatedText(text, found.toList),
@@ -253,6 +254,18 @@ private final case class Finding
 
   /** Matching as the quote is written, and then as loosely as allowed. */
   private val matchings = List(matching.exact, matching).distinct
+
+  /**
+    * Where each part is in the text, as each way of matching finds it, found
+    * once.
+    */
+  private val found = mutable.HashMap.empty[(Matching, String), List[Found]]
+
+  private def matches(matching: Matching, part: String): List[Found] = found
+    .getOrElseUpdate(
+      (matching, part),
+      matching.find(part, text),
+    )
 
   /** Where `quote` is placed, or why it is not. */
   def place(quote: String): Either[Unplaced.Reason, List[Span]] =
@@ -293,13 +306,15 @@ private final case class Finding
     (matching: Matching, parts: List[String])
     : Option[List[Span]] = parts
     .headOption
-    .map(matching.find(_, text))
-    .collect { case only :: Nil => only.start }
+    .map(matches(matching, _))
+    .collect { case only :: Nil => only.span.start }
     .flatMap(from(matching, parts, _).headOption)
 
   /**
-    * Each placing of `parts` whose first is found from `start` on, in order,
-    * each later part first found after the one before.
+    * Each placing of `parts` whose first's passage begins from `start` on, in
+    * order, each later part's beginning after the passage of the one before
+    * ends: the passages they mark, not the words around them, which may begin
+    * before and overlap.
     */
   private def from
     (
@@ -309,11 +324,12 @@ private final case class Finding
     )
     : LazyList[List[Span]] = parts match
     case Nil          => LazyList.empty
-    case head :: rest => matching
-        .find(head, text)
+    case head :: rest => matches(matching, head)
         .to(LazyList)
-        .filter(_.start >= start)
-        .flatMap(found => after(matching, rest, found.end).map(found.span :: _))
+        .filter(_.span.start >= start)
+        .flatMap(found =>
+          after(matching, rest, found.span.end).map(found.span :: _),
+        )
 
   private def after
     (
@@ -323,10 +339,9 @@ private final case class Finding
     )
     : Option[List[Span]] = parts
     .foldLeft(Option((start, Vector.empty[Span]))):
-      case (Some((at, spans)), part) => matching
-          .find(part, text)
-          .find(_.start >= at)
-          .map(found => (found.end, spans :+ found.span))
+      case (Some((at, spans)), part) => matches(matching, part)
+          .find(_.span.start >= at)
+          .map(found => (found.span.end, spans :+ found.span))
       case (None, _) => None
     .map(_._2.toList)
 

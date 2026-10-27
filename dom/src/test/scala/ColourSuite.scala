@@ -56,3 +56,31 @@ class ColourSuite extends FunSuite:
       None,
     )
     assertEquals(Colour.parse("rgb(1 2 three)"), None)
+
+  test("A colour's function takes all its arguments, set apart alike"):
+    List(
+      "rgb(1)",
+      "hsl(1 2)",
+      "rgb(1, 2 3)",
+      "rgb(1 2 3 4)",
+    ).foreach(css => assertEquals(Colour.parse(css), None, css))
+    List(
+      "rgb(1, 2, 3)",
+      "rgba(1, 2, 3, 0.5)",
+      "rgb(1 2 3 / 50%)",
+      "hwb(120 10% 20%)",
+    ).foreach(css => assert(Colour.parse(css).isDefined, css))
+
+  test("A custom property may fall back on a colour, and nothing else"):
+    assert(Colour.parse("var(--x, #fff)").isDefined)
+    assert(Colour.parse("VAR(--x)").isDefined)
+    assert(Colour.parse("var(--x, rgb(1 2 3))").isDefined)
+    assertEquals(Colour.parse("var(--x, url(y))"), None)
+    assertEquals(
+      Colour.parse("var(--x, red), url(y)"),
+      None,
+    )
+
+  test("The system's colours are colours"):
+    assert(Colour.parse("Canvas").isDefined)
+    assert(Colour.parse("Highlight").isDefined)

@@ -103,6 +103,12 @@ object Anchoring:
     * stand earlier where they would be found instead, and then a word or more
     * either side, the passage marked between them. Each point is quoted with
     * the word on either side of it, or more.
+    *
+    * An annotation that no quote within reach places back, as in a text
+    * repeating the same words further than eight words either side, or one
+    * holding [[Quoted.caret]], [[Quoted.open]] or [[Quoted.close]] itself, is
+    * quoted with as many words around it as may be, and may not anchor back;
+    * [[anchor]] tells which do not, by where it places them.
     */
   def quote[A]
     (
@@ -259,9 +265,9 @@ private final case class Finding
     * Where each part is in the text, as each way of matching finds it, found
     * once.
     */
-  private val found = mutable.HashMap.empty[(Matching, String), List[Found]]
+  private val cache = mutable.HashMap.empty[(Matching, String), List[Found]]
 
-  private def matches(matching: Matching, part: String): List[Found] = found
+  private def matches(matching: Matching, part: String): List[Found] = cache
     .getOrElseUpdate(
       (matching, part),
       matching.find(part, text),

@@ -1,5 +1,7 @@
 package com.alecdorrington.annotatedtextformat.dom
 
+import scala.scalajs.js
+
 /**
   * A colour in which annotations are highlighted: one of the forms of a colour
   * in CSS, and nothing more, as it goes into styles, where anything else, such
@@ -20,17 +22,38 @@ object Colour:
   /**
     * The colour that CSS writes as `css`, if it is one of the forms of a
     * colour: a hex colour; a function of a colour space, as `rgb(...)` or
-    * `hsl(...)`, of numbers, with units or `none`; a named colour; or a custom
-    * property, as `var(--name)`.
+    * `hsl(...)`, of its numbers, with units or `none`; a named colour or a
+    * system colour; or a custom property, as `var(--name)`, with a colour to
+    * fall back on, if any. Where the browser can say, as by `CSS.supports`,
+    * whatever it takes for a colour is one too, as `color-mix(...)`.
     */
   def parse(css: String): Option[Colour] =
     val trimmed = css.trim
-    Option.when(
-      names.contains(trimmed.toLowerCase) || forms.exists(_.matches(trimmed)),
-    )(trimmed)
+    Option.when(written(trimmed) || supported(trimmed))(trimmed)
 
   /** The colour of the text. */
   val text: Colour = "currentcolor"
+
+  /** Whether `css` is written in one of the forms of a colour that are known. */
+  private def written(css: String): Boolean = names.contains(css.toLowerCase) ||
+    forms.exists(_.matches(css)) || variable(css)
+
+  /** Whether `css` is a custom property, falling back, if at all, on a colour. */
+  private def variable(css: String): Boolean = css match
+    case Variable(_, null)     => true
+    case Variable(_, fallback) => written(fallback.trim)
+    case _                     => false
+
+  private val Variable = """(?is)var\(\s*(--[a-zA-Z0-9_-]+)\s*(?:,(.*))?\)""".r
+
+  /**
+    * Whether the browser, if it can say, takes `css` for a colour; asked of
+    * `CSS` only if there is one, as JavaScript refuses to read it if not.
+    */
+  private def supported(css: String): Boolean =
+    js.typeOf(js.Dynamic.global.CSS) != "undefined" &&
+    js.typeOf(js.Dynamic.global.CSS.supports) == "function" &&
+    js.Dynamic.global.CSS.supports("color", css).asInstanceOf[Boolean]
 
   /**
     * An argument of a function of a colour space: a number, with a unit, or
@@ -39,15 +62,24 @@ object Colour:
   private val argument =
     """(?:[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?(?:%|deg|rad|grad|turn)?|none)"""
 
-  /** The forms of a colour but names, none of which may hold anything else. */
+  /**
+    * The forms of a colour but names and custom properties: a hex colour; and
+    * functions of a colour space, each of three arguments and perhaps an
+    * opacity, spaced apart with the opacity after `/`, or, for the older
+    * functions, all set apart by commas.
+    */
   private val forms = List(
     """#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})""".r,
-    s"""(?i)(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\\(\\s*$argument(?:(?:\\s*[,/]\\s*|\\s+)$argument)*\\s*\\)"""
+    s"""(?i)(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\\(\\s*$argument\\s+$argument\\s+$argument(?:\\s*/\\s*$argument)?\\s*\\)"""
       .r,
-    """var\(\s*--[a-zA-Z0-9_-]+\s*\)""".r,
+    s"""(?i)(?:rgba?|hsla?)\\(\\s*$argument\\s*,\\s*$argument\\s*,\\s*$argument(?:\\s*,\\s*$argument)?\\s*\\)"""
+      .r,
   )
 
-  /** The named colours of CSS, and `transparent` and `currentcolor`. */
+  /**
+    * The named colours of CSS, `transparent`, `currentcolor`, and the system's
+    * colours.
+    */
   private val names: Set[String] = Set(
     "aliceblue",
     "antiquewhite",
@@ -199,6 +231,26 @@ object Colour:
     "yellowgreen",
     "transparent",
     "currentcolor",
+    // The system's colours.
+    "accentcolor",
+    "accentcolortext",
+    "activetext",
+    "buttonborder",
+    "buttonface",
+    "buttontext",
+    "canvas",
+    "canvastext",
+    "field",
+    "fieldtext",
+    "graytext",
+    "highlight",
+    "highlighttext",
+    "linktext",
+    "mark",
+    "marktext",
+    "selecteditem",
+    "selecteditemtext",
+    "visitedtext",
   )
 
   extension (colour: Colour)

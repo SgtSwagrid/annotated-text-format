@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Problem}
+import com.alecdorrington.annotatedtextformat.AnnotatedText
 import org.scalajs.dom
 import scala.scalajs.js
 
@@ -20,7 +20,9 @@ object Decorator:
     * annotations it belongs to, and the attribute [[Passage.decorated]]. It
     * owns the `background` of each element it highlights, drawing beneath the
     * highlight whatever layers `look` adds, and, where the system forces its
-    * own colours, which takes backgrounds away, it underlines the text.
+    * own colours, which takes backgrounds away, it underlines the text. It is
+    * refused if the annotations are of another text, or if `prefix` could not
+    * begin a class's name as it is, unescaped in a selector.
     */
   def decorate[A]
     (
@@ -29,18 +31,32 @@ object Decorator:
       look: Look[A],
       prefix: String = "atf",
     )
-    : Either[Problem, Decoration[A]] = Either.cond(
-    annotated.text == passage.text,
-    Decoration.make(passage, annotated, look, name(prefix)),
-    Problem.OtherText,
-  )
+    : Either[Refusal, Decoration[A]] =
+    if !named(prefix) then Left(Refusal.Unnamed(prefix))
+    else if annotated.text != passage.text then Left(Refusal.OtherText)
+    else Right(Decoration.make(passage, annotated, look, prefix))
 
   /**
-    * `prefix`, if it may begin a class's name as it is, unescaped in a
-    * selector; or else the default, `atf`.
+    * Whether `prefix` may begin a class's name as it is, unescaped in a
+    * selector.
     */
-  private def name(prefix: String): String =
-    if """[a-zA-Z_][a-zA-Z0-9_-]*""".r.matches(prefix) then prefix else "atf"
+  private def named(prefix: String): Boolean = """[a-zA-Z_][a-zA-Z0-9_-]*"""
+    .r
+    .matches(prefix)
+
+/** Why annotations could not be put into a page. */
+enum Refusal:
+
+  /** The annotations are of another text than the passage's. */
+  case OtherText
+
+  /** `prefix` could not begin a class's name, unescaped in a selector. */
+  case Unnamed(prefix: String)
+
+  /** It, described in a sentence. */
+  def message: String = this match
+    case OtherText => "The annotations are of another text than the passage's."
+    case Unnamed(prefix) => s"\"$prefix\" cannot begin the name of a class."
 
 /**
   * The annotations of `annotated`, put in the page in a passage, which may be
@@ -54,6 +70,7 @@ final class Decoration[A] private (
   origins: Origins,
   look: Look[A],
   prefix: String,
+  sheet: dom.Element,
 ):
 
   private var hidden = Set.empty[Int]
@@ -98,10 +115,23 @@ final class Decoration[A] private (
     * Takes every annotation out of the page, putting back the text that each
     * took the place of, and joining each text node of the page back together.
     */
-  def restore(): Unit =
+  def restore(): Unit = if !taken then
+    taken = true
     placed.foreach(unplace)
-    Origins.join(passage.root, origins)
-    Forcing.release(passage.root, prefix)
+    Origins.join(around(passage.root), origins)
+    Forcing.release(sheet)
+
+  /** Whether it has been taken out of the page, after which it does nothing. */
+  private var taken = false
+
+  /**
+    * Where the text nodes that `root` was split into lie: beneath it, or, if it
+    * is a text node itself, beside it, in its parent.
+    */
+  private def around(root: dom.Node): dom.Node =
+    if root.nodeType == Passage.textNode then
+      Option(root.parentNode).getOrElse(root)
+    else root
 
   private def unplace(each: Placed[A]): Unit = Option(each.element.parentNode)
     .foreach(parent =>
@@ -222,10 +252,10 @@ private object Decoration:
       origins,
       look,
       prefix,
+      Forcing.use(passage.root, prefix),
     )
     placed.foreach(decoration.refresh)
     placed.foreach(decoration.listen)
-    Forcing.use(passage.root, prefix)
     decoration
 
 /**
@@ -238,18 +268,22 @@ private object Decoration:
   */
 private object Forcing:
 
-  def use(root: dom.Node, prefix: String): Unit =
+  /**
+    * The sheet of `prefix` for the passage at `root`, counting one more use of
+    * it.
+    */
+  def use(root: dom.Node, prefix: String): dom.Element =
     val container = containerOf(root)
     val sheet     =
       sheetIn(container, prefix).getOrElse(made(root, container, prefix))
     sheet.setAttribute("data-uses", (uses(sheet) + 1).toString)
+    sheet
 
-  def release(root: dom.Node, prefix: String): Unit =
-    sheetIn(containerOf(root), prefix).foreach(sheet =>
-      if uses(sheet) <= 1 then
-        Option(sheet.parentNode).foreach(_.removeChild(sheet))
-      else sheet.setAttribute("data-uses", (uses(sheet) - 1).toString),
-    )
+  /** Counts one use less of `sheet`, taking it out once there are none. */
+  def release(sheet: dom.Element): Unit =
+    if uses(sheet) <= 1 then
+      Option(sheet.parentNode).foreach(_.removeChild(sheet))
+    else sheet.setAttribute("data-uses", (uses(sheet) - 1).toString)
 
   /** The sheet of `prefix` in `container`, if it is there. */
   private def sheetIn
@@ -280,13 +314,23 @@ private object Forcing:
 
   private def id(prefix: String): String = s"$prefix-forced-colours"
 
-  /** Where the sheet goes: the shadow root that `root` is in, or else the head. */
+  /**
+    * Where the sheet goes: the shadow root that `root` is in, or else the head
+    * of its document, even if `root` is not yet in it.
+    */
   private def containerOf(root: dom.Node): dom.Node =
     val top = root.asInstanceOf[js.Dynamic].getRootNode().asInstanceOf[dom.Node]
-    if top.nodeType == Passage.fragmentNode then top
+    if shadow(top) then top
     else
       val page = document(root)
       Option(page.querySelector("head")).getOrElse(page.documentElement)
+
+  /** Whether `node` is a shadow root, not just a fragment of a document. */
+  private def shadow(node: dom.Node): Boolean =
+    node.nodeType == Passage.fragmentNode && {
+      val host = node.asInstanceOf[js.Dynamic].host
+      !js.isUndefined(host) && host != null
+    }
 
   private def document(root: dom.Node): dom.Document =
     if root.nodeType == Passage.documentNode then

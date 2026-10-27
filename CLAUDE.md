@@ -33,6 +33,7 @@ This is a Scala library that defines a common format for text annotated with typ
 - Case is folded character by character (`Matching.folded`), not by `(?i)`, which differs between the JVM and JavaScript.
 - `Colour` admits only the forms of a colour, since colours go into styles; never build a `Style.Layer` from a user's text.
 - jsdom's HTML parser turns `\r\n` into `\n`; put such text in with `createTextNode`.
+- In Scala.js, reading a JavaScript global that does not exist, as `js.Dynamic.global.CSS` in Node.js, throws; check it first with `js.typeOf(...)`, which compiles to `typeof`.
 - To try the library in another project before a release, `sbt 'set ThisBuild / version := "0.1.0-SNAPSHOT"' publishLocal`, and depend on that version.
 
 ## Instructions

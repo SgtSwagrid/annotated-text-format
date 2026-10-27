@@ -1,8 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{
-  AnnotatedText, Annotation, Problem, Span,
-}
+import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
 import munit.FunSuite
 import org.scalajs.dom
 import scala.scalajs.js
@@ -449,7 +447,7 @@ class DecorationSuite extends FunSuite:
         AnnotatedText.plain("Other text."),
         kept,
       ),
-      Left(Problem.OtherText),
+      Left(Refusal.OtherText),
     )
 
   test("Hiding one annotation leaves lit an element that another still lights"):
@@ -541,13 +539,92 @@ class DecorationSuite extends FunSuite:
       0,
     )
 
-  test("A prefix that could not be a class's name is the default"):
+  test("A prefix that could not begin a class's name is refused"):
     val paragraph = Jsdom.element("<p>She is late.</p>")
     val passage   = Passage(paragraph)
-    Decorator.decorate(
-      passage,
-      passage.annotate(List(Annotation(Span(7, 11), "late"))).toOption.get,
-      kept,
-      "my.notes",
+    assertEquals(
+      Decorator
+        .decorate(
+          passage,
+          passage.annotate(List(Annotation(Span(7, 11), "late"))).toOption.get,
+          kept,
+          "my.notes",
+        )
+        .left
+        .toOption,
+      Some(Refusal.Unnamed("my.notes")),
     )
-    assertEquals(texts(paragraph, "atf"), List("late"))
+    assertEquals(paragraph.innerHTML, "She is late.")
+
+  test("A text node as a passage's root is joined back together when restored"):
+    val paragraph  = Jsdom.element("<p>She is late.</p>")
+    val page       = paragraph.firstChild
+    val passage    = Passage(page)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(
+            Annotation(Span(0, 3), "she"),
+            Annotation(Span(4, 10), "is late"),
+          ))
+          .toOption
+          .get,
+        kept,
+      )
+      .toOption
+      .get
+    decoration.restore()
+    assertEquals(paragraph.childNodes.length, 1)
+    assert(paragraph.firstChild eq page)
+    assertEquals(page.textContent, "She is late.")
+
+  test("Restoring twice uses the stylesheet up no more than once"):
+    val both  = Jsdom.element("<div><p>She is late.</p><p>He is too.</p></div>")
+    val first = decorate(
+      both.firstElementChild,
+      kept,
+      Annotation(Span(7, 11), "late"),
+    )
+    val second = decorate(
+      both.lastElementChild,
+      kept,
+      Annotation(Span(3, 5), "is"),
+    )
+    def sheets = both
+      .ownerDocument
+      .querySelectorAll("#atf-forced-colours")
+      .length
+    first.restore()
+    first.restore()
+    assertEquals(sheets, 1)
+    second.restore()
+    assertEquals(sheets, 0)
+
+  test(
+    "In a fragment not yet in the document, the stylesheet goes in the document's head",
+  ):
+    val document = Jsdom.element("<p></p>").ownerDocument
+    val fragment = document.createDocumentFragment()
+    val inner    = document.createElement("p")
+    inner.textContent = "She is late."
+    fragment.appendChild(inner)
+    val decoration = decorate(
+      inner,
+      kept,
+      Annotation(Span(7, 11), "late"),
+    )
+    assertEquals(
+      document.querySelectorAll("head #atf-forced-colours").length,
+      1,
+    )
+    document.asInstanceOf[dom.HTMLDocument].body.appendChild(fragment)
+    assertEquals(
+      document.querySelectorAll("body #atf-forced-colours").length,
+      0,
+    )
+    decoration.restore()
+    assertEquals(
+      document.querySelectorAll("#atf-forced-colours").length,
+      0,
+    )

@@ -334,3 +334,19 @@ class AnchoringSuite extends FunSuite:
         annotation,
       ),
     )
+
+  test("Every word of a text, annotated at once, quotes back to where it is"):
+    val text  = "the cat and the dog, and the cat sat on the mat by the cat."
+    val words = """\S+"""
+      .r
+      .findAllMatchIn(text)
+      .map(found => Span(found.start, found.end))
+      .toList
+    val annotated = AnnotatedText
+      .of(text, words.map(Annotation(_, ())))
+      .toOption
+      .get
+    assertEquals(
+      Anchoring.anchor(text, Anchoring.quote(annotated)).annotated.annotations,
+      annotated.annotations,
+    )

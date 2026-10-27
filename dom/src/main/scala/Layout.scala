@@ -85,16 +85,19 @@ object Layout:
     )
 
   /**
-    * The lane of each annotation of `annotations`, by its index: `0` against
-    * the text, deeper lanes stacked away from it. An annotation keeps its lane
-    * for all its spans, so that its underline runs unbroken, and sorting on
-    * where it ends, the furthest first, puts one enclosing another above it.
+    * The lane of each annotation of `annotations`, by its index: `0` at the
+    * bottom edge of the text, deeper lanes stacked above it, as [[Style]] draws
+    * them. An annotation keeps its lane for all its spans, so that its
+    * underline runs unbroken, and sorting on where it ends, the furthest first,
+    * gives one enclosing another the lower lane.
     */
   def lanes(annotations: List[Annotation[?]]): Vector[Int] =
     val all = annotations.toVector
     all
       .indices
-      .sortBy(index => (all(index).extent.start, -all(index).extent.end))
+      .sortBy(index =>
+        all(index).extent.fold((0, 0))(span => (span.start, -span.end)),
+      )
       .foldLeft(Map.empty[Int, Int])((laned, index) =>
         laned + (index -> free(laned, all, index)),
       )

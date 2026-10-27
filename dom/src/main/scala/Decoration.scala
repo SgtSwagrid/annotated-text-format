@@ -15,15 +15,18 @@ object Decorator:
   /**
     * `annotated`, put into the page in `passage`, whose text it must be of, as
     * `look` shows it. Each element it puts there has the class `prefix`, or one
-    * beginning with it, and the attribute `data-<prefix>`, the indices of the
-    * annotations it belongs to; and every element has [[Passage.decorated]].
+    * beginning with it, the attribute `data-<prefix>`, the indices of the
+    * annotations it belongs to, and the attribute [[Passage.decorated]]. It
+    * owns the `background` of each element it highlights, drawing beneath the
+    * highlight whatever layers `look` adds, and, where the system forces its
+    * own colours, which takes backgrounds away, it underlines the text.
     */
   def decorate[A]
     (
       passage: Passage,
       annotated: AnnotatedText[A],
       look: Look[A],
-      prefix: String = "annotation",
+      prefix: String = "atf",
     )
     : Either[Problem, Decoration[A]] = Either.cond(
     annotated.text == passage.text,
@@ -34,7 +37,7 @@ object Decorator:
 /**
   * The annotations of `annotated`, put in the page in a passage, which may be
   * hidden and shown again, each read as the page's own text while hidden, and
-  * taken out of it.
+  * taken out of it. Each annotation is known by its index in `annotated`.
   */
 final class Decoration[A] private (
   val annotated: AnnotatedText[A],
@@ -59,6 +62,10 @@ final class Decoration[A] private (
   private def change(now: Set[Int], annotation: Int): Unit =
     hidden = now
     concerning(Set(annotation)).foreach(refresh)
+    if !isShown(annotation) then
+      concerning(
+        Set(annotation),
+      ).foreach(_.styled.classList.remove(s"$prefix-lit"))
 
   /** The elements in the page of the annotation at `annotation`. */
   def elements(annotation: Int): List[dom.Element] = concerning(Set(annotation))
@@ -133,7 +140,10 @@ final class Decoration[A] private (
     val style = each.styled.asInstanceOf[dom.HTMLElement].style
     Style.properties.foreach(style.removeProperty)
     Style
-      .of(marks.map(mark => look.colour(mark.value) -> mark.lane))
+      .declarations(
+        Style.layers(marks.map(mark => look.colour(mark.value) -> mark.lane)) ++
+          (if marks.isEmpty then Nil else look.beneath(marks.map(_.value))),
+      )
       .foreach((property, value) =>
         style.setProperty(property, value, "important"),
       )
@@ -185,7 +195,24 @@ private object Decoration:
     )
     placed.foreach(decoration.refresh)
     placed.foreach(decoration.listen)
+    forcing(passage.document, prefix)
     decoration
+
+  /**
+    * Underlines the text of every element highlighted with `prefix` in
+    * `document` where the system forces its own colours, which takes away their
+    * backgrounds and so their highlights, by a stylesheet put in once.
+    */
+  private def forcing(document: dom.Document, prefix: String): Unit =
+    val id = s"$prefix-forced-colours"
+    if document.getElementById(id) == null then
+      val style = document.createElement("style")
+      style.id = id
+      style.textContent =
+        s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } }"
+      Option(document.querySelector("head"))
+        .getOrElse(document.documentElement)
+        .appendChild(style)
 
 /**
   * A piece put in the page: its `element` there, the one within it that is
@@ -290,7 +317,7 @@ private final case class Edits
         Placed(insert, marker, marker, "", Nil)
       case Some(text) =>
         val element = tag(span(s"$prefix-inserted"), insert)
-        val styled  = span(prefix)
+        val styled  = tag(span(prefix), insert)
         styled.textContent = text
         val parts = Option.when(insert.before)(space()).toList ++
           List(styled) ++ Option.when(insert.after)(space()).toList

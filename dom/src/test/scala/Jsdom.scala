@@ -4,8 +4,9 @@ import org.scalajs.dom
 import scala.scalajs.js
 
 /**
-  * Documents of jsdom, from the `node_modules` that `package.json` lists, for
-  * the tests, which run in Node.js, which has no DOM of its own.
+  * Documents of jsdom, from the `node_modules` that `package.json` lists, in
+  * the directory the build gives as `NODE_PACKAGES`, or else the one the tests
+  * run in, for the tests, which run in Node.js, which has no DOM of its own.
   */
 object Jsdom:
 
@@ -14,7 +15,12 @@ object Jsdom:
     .global
     .process
     .getBuiltinModule("node:module")
-    .createRequire(s"${ js.Dynamic.global.process.cwd() }/")("jsdom")
+    .createRequire(s"$packages/")("jsdom")
+
+  private def packages: String =
+    val named = js.Dynamic.global.process.env.NODE_PACKAGES
+    if js.isUndefined(named) then js.Dynamic.global.process.cwd().toString
+    else named.toString
 
   /** The first element of a body holding the HTML `html`. */
   def element(html: String): dom.Element = js

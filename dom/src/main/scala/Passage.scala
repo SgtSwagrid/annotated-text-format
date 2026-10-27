@@ -9,8 +9,9 @@ import org.scalajs.dom
   * A stretch of a page, beneath `root`: its text nodes, and the elements within
   * it that are not prose, as code, or a decoration's own, each of which stands
   * in its `text` as one [[Passage.placeholder]], so that the text on either
-  * side of it is not taken as side by side. Annotations of the passage are of
-  * its `text`.
+  * side of it is not taken as side by side. Each `<br>`, and each boundary
+  * between blocks within it, as paragraphs, stands in its `text` as a line
+  * break. Annotations of the passage are of its `text`.
   */
 final class Passage private (
   val root: dom.Node,
@@ -74,12 +75,13 @@ object Passage:
 
   /**
     * The passage beneath `root`, in which the elements that `skip` holds for,
-    * and those of decorations, are not prose.
+    * by default those that are [[nonProse]], and those of decorations, are not
+    * prose.
     */
   def apply
     (
       root: dom.Node,
-      skip: dom.Element => Boolean = _ => false,
+      skip: dom.Element => Boolean = nonProse,
     )
     : Passage = new Passage(root, partsOf(root, skip).toVector)
 
@@ -89,24 +91,132 @@ object Passage:
     case Prose(node: dom.Text)
     case Atom(element: dom.Element)
 
+    /** A break between lines, as a `<br>` makes, or between blocks. */
+    case Break
+
     def text: String = this match
       case Prose(node) => node.data
       case Atom(_)     => placeholder.toString
+      case Break       => "\n"
 
   /**
-    * The parts of `node`: itself, if a text or not prose, or else its
-    * children's.
+    * The parts beneath `root`, a break standing between blocks, but none at
+    * either end, nor two together.
     */
   private def partsOf
+    (
+      root: dom.Node,
+      skip: dom.Element => Boolean,
+    )
+    : List[Part] = children(root)
+    .flatMap(within(_, skip))
+    .foldLeft(List.empty[Part]):
+      case (Part.Break :: rest, Part.Break) => Part.Break :: rest
+      case (Nil, Part.Break)                => Nil
+      case (done, part)                     => part :: done
+    .dropWhile(_ == Part.Break)
+    .reverse
+
+  /**
+    * The parts of `node`: itself, if a text or not prose; a break, if a `<br>`;
+    * or else its children's, with a break either side of a block.
+    */
+  private def within
     (
       node: dom.Node,
       skip: dom.Element => Boolean,
     )
     : List[Part] = node.nodeType match
-    case `textNode` => List(Part.Prose(node.asInstanceOf[dom.Text]))
-    case `elementNode` if atomic(node.asInstanceOf[dom.Element], skip) =>
-      List(Part.Atom(node.asInstanceOf[dom.Element]))
-    case _ => children(node).flatMap(partsOf(_, skip))
+    case `textNode`    => List(Part.Prose(node.asInstanceOf[dom.Text]))
+    case `elementNode` => element(node.asInstanceOf[dom.Element], skip)
+    case _             => children(node).flatMap(within(_, skip))
+
+  private def element
+    (
+      element: dom.Element,
+      skip: dom.Element => Boolean,
+    )
+    : List[Part] =
+    if atomic(element, skip) then List(Part.Atom(element))
+    else if name(element) == "br" then List(Part.Break)
+    else
+      val inner = children(element).flatMap(within(_, skip))
+      if blocks.contains(name(element)) then (Part.Break :: inner) :+ Part.Break
+      else inner
+
+  private def name(element: dom.Element): String = element.tagName.toLowerCase
+
+  /** The elements that stand as blocks of their own, between lines. */
+  private val blocks: Set[String] = Set(
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "caption",
+    "dd",
+    "details",
+    "dialog",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hgroup",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "summary",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+  )
+
+  /**
+    * Whether `element` holds no prose, as a script, a style or a field to fill
+    * in does, which a passage leaves out by default.
+    */
+  val nonProse: dom.Element => Boolean =
+    element => unread.contains(name(element))
+
+  private val unread: Set[String] = Set(
+    "audio",
+    "canvas",
+    "datalist",
+    "embed",
+    "iframe",
+    "input",
+    "math",
+    "noscript",
+    "object",
+    "option",
+    "script",
+    "select",
+    "style",
+    "svg",
+    "template",
+    "textarea",
+    "video",
+  )
 
   private def atomic
     (

@@ -17,8 +17,13 @@ final case class Annotation[+A](spans: List[Span], value: A):
   /** It, with `transform` applied to its value. */
   def map[B](transform: A => B): Annotation[B] = copy(value = transform(value))
 
-  /** The span from where its first span begins to where its last ends. */
-  def extent: Span = Span(spans.head.start, spans.last.end)
+  /**
+    * The span from where its first span begins to where its last ends, unless
+    * it has none, as no annotation of an [[AnnotatedText]] does.
+    */
+  def extent: Option[Span] = spans
+    .headOption
+    .map(first => Span(first.start, spans.last.end))
 
   /** Its parts of `text`, one for each of its spans. */
   def in(text: String): List[String] = spans.map(_.in(text))

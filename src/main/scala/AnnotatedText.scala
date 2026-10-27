@@ -56,7 +56,7 @@ object AnnotatedText:
       annotations: List[Annotation[A]],
     )
     : Either[List[Problem], AnnotatedText[A]] =
-    annotations.zipWithIndex.flatMap(Problem.of(text.length)) match
+    annotations.zipWithIndex.flatMap(Problem.of(text)) match
       case Nil      => Right(AnnotatedText(text, annotations))
       case problems => Left(problems)
 
@@ -64,8 +64,10 @@ object AnnotatedText:
   def plain(text: String): AnnotatedText[Nothing] = AnnotatedText(text, Nil)
 
   /**
-    * `text`, with those of `annotations` that fit it, the rest left out, as
-    * annotations made for a text since edited may no longer fit.
+    * `text`, with those of `annotations` that fit it, the rest left out. It
+    * only checks them, and moves none: annotations of a text since edited must
+    * first be carried to where they stand in it, after which some may no longer
+    * fit, as those whose words were edited away.
     */
   def fitting[A]
     (
@@ -78,7 +80,7 @@ object AnnotatedText:
       .zipWithIndex
       .collect {
         case (annotation, index)
-          if Problem.of(text.length)(annotation, index).isEmpty => annotation
+          if Problem.of(text)(annotation, index).isEmpty => annotation
       },
   )
 
@@ -143,6 +145,12 @@ enum Problem:
   /** The spans of the annotation at `index` are out of order, or overlap. */
   case Unordered(index: Int)
 
+  /**
+    * The span `span` of the annotation at `index` begins or ends within a
+    * character that takes two code units, as an emoji does, splitting it.
+    */
+  case Splits(index: Int, span: Span)
+
   /** The annotations are of another text. */
   case OtherText
 
@@ -153,16 +161,23 @@ enum Problem:
           .start } to ${ span.end }, outside the text."
     case Unordered(index) =>
       s"Annotation $index has spans out of order, or overlapping."
+    case Splits(index, span) => s"Annotation $index has a span, from ${ span
+          .start } to ${ span.end }, that splits a character."
     case OtherText => "The annotations are of another text."
 
 object Problem:
 
-  /** What keeps `annotation`, at `index`, from fitting a text of `length`. */
-  def of(length: Int)(annotation: Annotation[?], index: Int): List[Problem] =
+  /** What keeps `annotation`, at `index`, from fitting `text`. */
+  def of(text: String)(annotation: Annotation[?], index: Int): List[Problem] =
     if annotation.spans.isEmpty then List(Unspanned(index))
     else
-      annotation.spans.filterNot(_.fits(length)).map(Outside(index, _)) ++
+      val (inside, outside) = annotation.spans.partition(_.fits(text.length))
+      outside.map(Outside(index, _)) ++
+        inside.filter(splits(text, _)).map(Splits(index, _)) ++
         Option.when(!ordered(annotation.spans))(Unordered(index))
+
+  private def splits(text: String, span: Span): Boolean =
+    Script.splits(text, span.start) || Script.splits(text, span.end)
 
   /** Whether each of `spans` ends before the next begins, or where it does. */
   private def ordered(spans: List[Span]): Boolean = spans

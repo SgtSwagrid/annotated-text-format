@@ -18,6 +18,9 @@ class AnchoringSuite extends FunSuite:
   private def parts(text: String, quotes: String*): List[List[String]] =
     anchored(text, quotes*).annotated.annotations.map(_.in(text))
 
+  private def reasons(text: String, quotes: String*): List[Unplaced.Reason] =
+    anchored(text, quotes*).unplaced.map(_.reason)
+
   test("A word quoted again is found after the one before it"):
     assertEquals(
       spans("the cat and the dog", "the", "the"),
@@ -30,6 +33,16 @@ class AnchoringSuite extends FunSuite:
       List(List(Span(0, 11)), List(Span(4, 7))),
     )
 
+  test("A quote nested at the start of the one before it is found there"):
+    assertEquals(
+      spans(
+        "The cat sat. The dog ran.",
+        "The cat sat.",
+        "The",
+      ),
+      List(List(Span(0, 12)), List(Span(0, 3))),
+    )
+
   test("Two annotations of the same words are found at the same place"):
     assertEquals(
       spans("a dog", "dog", "dog"),
@@ -40,6 +53,40 @@ class AnchoringSuite extends FunSuite:
     assertEquals(
       spans("She is late.", "late", "She"),
       List(List(Span(7, 11)), List(Span(0, 3))),
+    )
+
+  test("A quote out of order leaves the search going on from where it was"):
+    assertEquals(
+      spans(
+        "A cat sat. A cat ran. A dog ran. A cat hid.",
+        "dog",
+        "sat",
+        "cat",
+      ),
+      List(
+        List(Span(24, 27)),
+        List(Span(6, 9)),
+        List(Span(35, 38)),
+      ),
+    )
+
+  test("A quote as written is found before one matching only loosely"):
+    assertEquals(
+      spans(
+        "Paris is nice. I love paris.",
+        "paris",
+      ),
+      List(List(Span(22, 27))),
+    )
+
+  test("A doubled word is found, though the first match lies within a word"):
+    assertEquals(
+      spans("This is is wrong.", "is is"),
+      List(List(Span(5, 10))),
+    )
+    assertEquals(
+      spans("Breathe the the air", "the the"),
+      List(List(Span(8, 15))),
     )
 
   test("The parts of a separable verb are one annotation"):
@@ -80,10 +127,6 @@ class AnchoringSuite extends FunSuite:
     "A word is not found within another, unless whole words are not asked for",
   ):
     assertEquals(
-      parts("concatenate the cat", "cat"),
-      List(List("cat")),
-    )
-    assertEquals(
       spans("concatenate the cat", "cat"),
       List(List(Span(16, 19))),
     )
@@ -106,6 +149,17 @@ class AnchoringSuite extends FunSuite:
   test("Words of a script that does not space them are found within others"):
     assertEquals(parts("我的猫很可爱", "猫"), List(List("猫")))
 
+  test("Characters beyond the basic plane are found"):
+    assertEquals(
+      parts("I love it 😀 so", "it 😀"),
+      List(List("it 😀")),
+    )
+    assertEquals(parts("名字𠀋好", "𠀋"), List(List("𠀋")))
+
+  test("Case is folded alike on every platform, so a dotless i is not an i"):
+    assertEquals(parts("kız", "kiz"), Nil)
+    assertEquals(parts("KIZ", "kiz"), List(List("KIZ")))
+
   test(
     "A caret marks the point at which it stands, beside the space it is beside",
   ):
@@ -122,6 +176,28 @@ class AnchoringSuite extends FunSuite:
       List(List(Span.point(7))),
     )
 
+  test("A caret at a part's edge keeps its side, and its word whole"):
+    assertEquals(
+      spans("chocolate is late", "‸late"),
+      List(List(Span.point(13))),
+    )
+    assertEquals(
+      spans("She is late.", "is‸"),
+      List(List(Span.point(6))),
+    )
+    assertEquals(
+      spans("She is late.", "is ‸"),
+      List(List(Span.point(7))),
+    )
+
+  test(
+    "A passage marked among words around it is told apart from the same words",
+  ):
+    assertEquals(
+      spans("the cat and the dog", "and ⟦the⟧ dog"),
+      List(List(Span(12, 15))),
+    )
+
   test("Words to move, and where they belong, are one annotation"):
     assertEquals(
       spans(
@@ -131,18 +207,36 @@ class AnchoringSuite extends FunSuite:
       List(List(Span(4, 10), Span.point(14))),
     )
 
-  test("A quote with nothing but a caret, or not in the text, is not placed"):
+  test("Quotes across line breaks match"):
+    assertEquals(
+      parts("one\r\ntwo three", "one two"),
+      List(List("one\r\ntwo")),
+    )
+
+  test("Markers that do not mark a passage are taken as written"):
+    assertEquals(
+      parts("a ⟧b", "a ⟧b"),
+      List(List("a ⟧b")),
+    )
+
+  test("A quote not placed says why, as for the model that wrote it"):
     val result = anchored("She is late.", "‸", "early", "late")
     assertEquals(
       result.unplaced.map(_.index),
       List(0, 1),
     )
     assertEquals(
-      result.unplaced.map(_.message),
+      result.unplaced.map(_.reason),
       List(
-        "Annotation 0 quotes \"‸\", which is not in the text.",
-        "Annotation 1 quotes \"early\", which is not in the text.",
+        Unplaced.Reason.Empty,
+        Unplaced.Reason.Missing,
       ),
+    )
+    assert(
+      result
+        .unplaced(1)
+        .message
+        .startsWith("Annotation 1 quotes \"early\", which is not in the text."),
     )
     assertEquals(
       result.annotated.annotations,
@@ -151,33 +245,36 @@ class AnchoringSuite extends FunSuite:
     assert(!result.complete)
 
   test(
-    "Annotations quoted in the order they begin anchor back to where they are",
+    "A quote only before the one before it, more than once, is out of order",
   ):
-    val text      = "She always is late, and always will be."
+    assertEquals(
+      reasons("a cat, a cat, a dog", "dog", "cat"),
+      List(Unplaced.Reason.OutOfOrder),
+    )
+
+  test(
+    "Annotations quote back to where they are, with words around them where needed",
+  ):
+    val text      = "the cat and the dog, and the cat."
     val annotated = AnnotatedText
       .of(
         text,
         List(
-          Annotation(
-            List(Span(4, 10), Span.point(14)),
-            "move",
-          ),
-          Annotation(Span(24, 30), "again"),
-          Annotation(Span(31, 38), "tense"),
+          Annotation(Span(12, 15), "the"),
+          Annotation(List(Span(4, 7), Span.point(20)), "move"),
+          Annotation(Span(29, 32), "cat"),
+          Annotation(Span(7, 11), " and"),
         ),
       )
       .toOption
       .get
     val quoted = Anchoring.quote(annotated)
+    val sorted = annotated.annotations.sortBy(_.spans.head.start)
     assertEquals(
-      quoted.map(_.quote),
-      List(
-        "always … is ‸late,",
-        "always",
-        "will be",
-      ),
+      Anchoring.anchor(text, quoted).annotated.annotations,
+      sorted,
     )
     assertEquals(
-      Anchoring.anchor(text, quoted),
-      Anchored(annotated, Nil),
+      quoted.map(_.value),
+      sorted.map(_.value),
     )

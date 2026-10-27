@@ -22,13 +22,18 @@ object Spacing:
     * none beside a script that does not space its words.
     */
   def around(text: String, at: Int): (Boolean, Boolean) = (
-    text.lift(at - 1).exists(char => apart(char) && !opening.contains(char)),
-    text.lift(at).exists(char => apart(char) && !closing.contains(char)),
+    Script
+      .before(text, at)
+      .exists(char => apart(char) && !among(opening, char)),
+    Script.after(text, at).exists(char => apart(char) && !among(closing, char)),
   )
 
-  /** Whether a word beside `char` must be spaced off it. */
-  private def apart(char: Char): Boolean = !char.isWhitespace &&
+  /** Whether a word beside the code point `char` must be spaced off it. */
+  private def apart(char: Int): Boolean = !Character.isWhitespace(char) &&
     Script.spaced(char)
+
+  private def among(chars: String, char: Int): Boolean =
+    chars.exists(_.toInt == char)
 
   /** The spaces that may be taken away: not line breaks. */
   private val spaces = " \t\u00a0"

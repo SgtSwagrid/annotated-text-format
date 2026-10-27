@@ -1,3 +1,4 @@
+import org.scalajs.jsenv.nodejs.NodeJSEnv
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
 import sbt.*
 import sbt.Keys.*
@@ -33,10 +34,17 @@ object Npm:
         )
   }
 
-  /** Installs the packages before the project's tests run. */
+  /**
+    * Installs the packages before the project's tests run, and tells the tests
+    * where, as `NODE_PACKAGES`, the directory they were installed in, as Node.js
+    * may run them from another.
+    */
   lazy val beforeTests: Seq[Setting[?]] = Seq(
     Test / jsEnvInput :=
       Def.uncached((Test / jsEnvInput).dependsOn(ThisBuild / npmInstall).value),
+    Test / jsEnv := Def.uncached(new NodeJSEnv(NodeJSEnv.Config().withEnv(Map(
+      "NODE_PACKAGES" -> (LocalRootProject / baseDirectory).value.getAbsolutePath,
+    )))),
   )
 
   /** Whether the packages were installed since `package-lock.json` changed. */

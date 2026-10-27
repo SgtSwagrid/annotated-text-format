@@ -17,7 +17,11 @@ object Style:
     "background-repeat",
   )
 
-  /** A layer of a background: its image, its size and its position. */
+  /**
+    * A layer of a background: its image, its size and its position. They go
+    * into CSS as they are, so build images with [[fill]], from a [[Colour]],
+    * never from text that a user wrote.
+    */
   final case class Layer
     (
       image: String,
@@ -58,13 +62,13 @@ object Style:
       ).map(_.mkString(", ")).zip(properties).map(_.swap)
 
   private def underline(colour: Colour, lane: Int): Layer = Layer(
-    fill(colour.css),
+    paint(colour.css),
     s"100% ${ laneHeight }px",
     s"0 calc(100% - ${ laneHeight * lane }px)",
   )
 
   private def tinted(colour: Colour, alpha: Double): Layer = Layer(
-    fill(colour.faded(alpha)),
+    paint(colour.faded(alpha)),
     "100% 100%",
     "0 0",
   )
@@ -73,4 +77,6 @@ object Style:
   private def share(count: Int): Double = 1 - math.pow(1 - tint, 1.0 / count)
 
   /** A layer's image of nothing but `colour`. */
-  def fill(colour: String): String = s"linear-gradient($colour, $colour)"
+  def fill(colour: Colour): String = paint(colour.css)
+
+  private def paint(css: String): String = s"linear-gradient($css, $css)"

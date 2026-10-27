@@ -29,6 +29,10 @@ This is a Scala library that defines a common format for text annotated with typ
 - The file tools write `\u00a0` and the like as the characters themselves; write escapes another way (the build's sources hold only visible characters beyond ASCII), and check with a scan for invisible ones.
 - scalafmt turns an `if … then … else` inside a pattern guard into invalid syntax; move the condition into a method.
 - On Windows, if compiling fails with "A required privilege is not held by the client" while backing up a `.sjsir`, delete `target/out/sjs1/*/*/classes` (sbt 2's disk cache links them) and compile again.
+- Scanning a text with `Matcher.find(from)` must step a whole code point at a time: in JavaScript, a search begun inside a surrogate pair finds the match at the pair's start again, forever (`scan` in `Matching.scala`).
+- Case is folded character by character (`Matching.folded`), not by `(?i)`, which differs between the JVM and JavaScript.
+- `Colour` admits only the forms of a colour, since colours go into styles; never build a `Style.Layer` from a user's text.
+- jsdom's HTML parser turns `\r\n` into `\n`; put such text in with `createTextNode`.
 - To try the library in another project before a release, `sbt 'set ThisBuild / version := "0.1.0-SNAPSHOT"' publishLocal`, and depend on that version.
 
 ## Instructions

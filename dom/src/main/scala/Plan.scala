@@ -115,18 +115,43 @@ private[dom] object Plan:
     (alone.map(segment => new Piece.Wrap(segment.span, segment.marks, None)) ++
       replaced.map(together(stretches))).sortBy(_.span)
 
-  /** The replaced `span`, with the marks of every stretch within it. */
+  /**
+    * The replaced `span`, with the marks of every stretch within it, each
+    * annotation's in a lane of its own, as they share one element.
+    */
   private def together[A]
     (stretches: List[Segment[A]])
     (span: Span, replacement: Replacement)
     : Piece.Wrap[A] = new Piece.Wrap(
     span,
-    stretches
-      .filter(segment => span.covers(segment.span))
-      .flatMap(_.marks)
-      .distinct,
+    apart(
+      stretches
+        .filter(segment => span.covers(segment.span))
+        .flatMap(_.marks)
+        .distinct,
+    ),
     Some(replacement),
   )
+
+  /**
+    * `marks`, each annotation's in a lane no other annotation's holds: its own,
+    * if it is free, or else the next one free, as two annotations sharing a
+    * lane elsewhere, never side by side, may meet in one element.
+    */
+  private def apart[A](marks: List[Mark[A]]): List[Mark[A]] =
+    val lanes = marks
+      .map(_.annotation)
+      .distinct
+      .sortBy(annotation =>
+        marks.find(_.annotation == annotation).fold(0)(_.lane),
+      )
+      .foldLeft(Map.empty[Int, Int])((lanes, annotation) =>
+        val wanted = marks.find(_.annotation == annotation).fold(0)(_.lane)
+        lanes +
+          (annotation ->
+            Iterator.from(wanted).dropWhile(lanes.values.toSet).next()),
+      )
+    marks.map(mark => mark.copy(lane = lanes(mark.annotation)))
 
   /** A gap for the space beside each emptied span, unless something wraps it. */
   private def gaps[A]

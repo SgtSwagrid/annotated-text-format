@@ -34,3 +34,16 @@ class SpacingSuite extends FunSuite:
 
   test("A word put in a script that does not space its words is not spaced"):
     assertEquals(Spacing.around("我的猫", 1), (false, false))
+
+  test(
+    "A word put in beside a full-width stop, or a character beyond the basic plane, is not spaced",
+  ):
+    assertEquals(
+      Spacing.around("我的猫。", 3),
+      (false, false),
+    )
+    assertEquals(
+      Spacing.around("名字𠀋好", 4),
+      (false, false),
+    )
+    assertEquals(Spacing.around("猫，狗", 1), (false, false))

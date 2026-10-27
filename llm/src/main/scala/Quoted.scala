@@ -12,7 +12,9 @@ import io.circe.{Decoder, Encoder, Json}
   * quoted in order, joined by [[Quoted.separator]], as `"stehe … auf"`. A point
   * between two characters, as where words belong, is quoted as a few words
   * around it, with [[Quoted.caret]] at the point, as `"is ‸late"`; those words
-  * are not themselves annotated.
+  * are not themselves annotated. So too a passage that might be taken for the
+  * same words elsewhere may be quoted with a few words around it, the passage
+  * itself between [[Quoted.open]] and [[Quoted.close]], as `"the ⟦cat⟧ sat"`.
   */
 final case class Quoted[+A](quote: String, value: A):
 
@@ -29,6 +31,12 @@ object Quoted:
 
   /** What marks a point in a quote. */
   val caret: Char = '‸'
+
+  /** What marks where the passage quoted among words around it begins. */
+  val open: Char = '⟦'
+
+  /** What marks where the passage quoted among words around it ends. */
+  val close: Char = '⟧'
 
   /**
     * The parts of `quote`, split where an ellipsis, as `…` or `...`, stands
@@ -48,7 +56,8 @@ object Quoted:
     s"""Quote each passage that you annotate exactly as the text writes it, never by counting its characters, and give the annotations in the order in which their passages begin.
        |Where other words split a passage, as they may a separable verb, quote its parts in order, joined by "${ separator
         .trim }" with a space either side, as in "stehe${ separator }auf".
-       |To mark a point between two characters, as where words belong, quote a word or two around it with "$caret" at the point, as in "is ${ caret }late"; those words are not themselves annotated."""
+       |To mark a point between two characters, as where words belong, quote a word or two around it with "$caret" at the point, as in "is ${ caret }late"; those words are not themselves annotated.
+       |Where a passage could be taken for the same words elsewhere, quote a word or two around it too, and mark the passage itself with "$open" and "$close", as in "the ${ open }cat$close sat"."""
       .stripMargin
 
   /**
@@ -63,7 +72,7 @@ object Quoted:
         "type"        -> Json.fromString("string"),
         "description" -> Json.fromString(
           s"The passage annotated, quoted exactly as the text writes it, its parts joined by \"${ separator
-              .trim }\", and a point marked by \"$caret\".",
+              .trim }\", a point marked by \"$caret\", and a passage quoted among words around it marked by \"$open\" and \"$close\".",
         ),
       ),
       "value" -> value,

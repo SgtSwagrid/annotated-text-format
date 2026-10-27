@@ -121,3 +121,25 @@ class AnnotatedTextSuite extends FunSuite:
       AnnotatedText.fitting(text, stale).annotations.map(_.value),
       List("kept"),
     )
+
+  test("A span that splits a character of two code units is refused"):
+    val emoji = "I love it 😀 so"
+    assertEquals(
+      AnnotatedText.of(
+        emoji,
+        List(Annotation(Span(10, 11), "half")),
+      ),
+      Left(List(Problem.Splits(0, Span(10, 11)))),
+    )
+    assert(
+      AnnotatedText
+        .of(
+          emoji,
+          List(Annotation(Span(10, 12), "whole")),
+        )
+        .isRight,
+    )
+
+  test("An annotation with no spans has no extent"):
+    assertEquals(Annotation(Nil, "nothing").extent, None)
+    assertEquals(verb.extent, Some(Span(4, 18)))

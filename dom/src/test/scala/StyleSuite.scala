@@ -30,3 +30,16 @@ class StyleSuite extends FunSuite:
       .toMap
       .apply("background-image")
     assertEquals("10.6%".r.findAllIn(image).size, 4)
+
+  test("An application's own layer is drawn with the highlight's"):
+    val shade = Style.Layer(Style.fill("grey"), "100% 100%", "0 0")
+    val drawn = Style.declarations(Style.layers(List(teal -> 0)) :+ shade).toMap
+    assertEquals(
+      drawn("background-image").split("linear-gradient").length - 1,
+      3,
+    )
+    assertEquals(
+      drawn("background-repeat"),
+      "no-repeat, no-repeat, no-repeat",
+    )
+    assertEquals(Style.declarations(Nil), Nil)

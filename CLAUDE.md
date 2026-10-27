@@ -28,6 +28,8 @@ This is a Scala library that defines a common format for text annotated with typ
 - The DOM tests run in Node.js through jsdom, installed by `npm ci` before them (`project/Npm.scala`). Node.js has no DOM globals, so the DOM code never tests a node's class (`case _: dom.Text`, `isInstanceOf`) nor reads `dom.Node.TEXT_NODE`: it compares `nodeType` with the numbers in `Passage`.
 - The file tools write `\u00a0` and the like as the characters themselves; write escapes another way (the build's sources hold only visible characters beyond ASCII), and check with a scan for invisible ones.
 - scalafmt turns an `if … then … else` inside a pattern guard into invalid syntax; move the condition into a method.
+- On Windows, if compiling fails with "A required privilege is not held by the client" while backing up a `.sjsir`, delete `target/out/sjs1/*/*/classes` (sbt 2's disk cache links them) and compile again.
+- To try the library in another project before a release, `sbt 'set ThisBuild / version := "0.1.0-SNAPSHOT"' publishLocal`, and depend on that version.
 
 ## Instructions
 

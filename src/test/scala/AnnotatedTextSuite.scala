@@ -111,3 +111,13 @@ class AnnotatedTextSuite extends FunSuite:
       one ++ AnnotatedText.plain("Other."),
       Left(List(Problem.OtherText)),
     )
+
+  test("Only the annotations that fit the text are kept, if asked"):
+    val stale = List(
+      Annotation(Span(4, 9), "kept"),
+      Annotation(Span(15, 40), "left out"),
+    )
+    assertEquals(
+      AnnotatedText.fitting(text, stale).annotations.map(_.value),
+      List("kept"),
+    )

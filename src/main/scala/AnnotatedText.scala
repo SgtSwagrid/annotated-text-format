@@ -64,6 +64,25 @@ object AnnotatedText:
   def plain(text: String): AnnotatedText[Nothing] = AnnotatedText(text, Nil)
 
   /**
+    * `text`, with those of `annotations` that fit it, the rest left out, as
+    * annotations made for a text since edited may no longer fit.
+    */
+  def fitting[A]
+    (
+      text: String,
+      annotations: List[Annotation[A]],
+    )
+    : AnnotatedText[A] = AnnotatedText(
+    text,
+    annotations
+      .zipWithIndex
+      .collect {
+        case (annotation, index)
+          if Problem.of(text.length)(annotation, index).isEmpty => annotation
+      },
+  )
+
+  /**
     * The JSON Schema of an annotated text whose values conform to the schema
     * `value`, whose definitions are lifted to its root, as
     * [[JsonSchema.around]] describes.

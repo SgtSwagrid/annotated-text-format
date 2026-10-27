@@ -1,7 +1,8 @@
-ThisBuild / description := "A reusable template for Scala libraries."
+ThisBuild / description :=
+  "A common format for text annotated with typed values, such as corrections and translations."
 
 ThisBuild / homepage :=
-  Some(uri("https://alecdorrington.com/scala-library-template"))
+  Some(uri("https://alecdorrington.com/annotated-text-format"))
 
 ThisBuild / organization         := "com.alecdorrington"
 ThisBuild / organizationName     := "Alec Dorrington"

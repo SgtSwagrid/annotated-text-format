@@ -19,7 +19,7 @@ This is a Scala library that defines a common format for text annotated with typ
   - Core: `Span` (UTF-16 offsets; equal ends make a point), `Annotation[A]` (one or more spans, in order, none overlapping), `AnnotatedText[A]` (built only through `AnnotatedText.of`, which checks the spans fit; its constructor is `private[annotatedtextformat]`), circe codecs, and JSON Schemas built around a value's schema by `JsonSchema.around`, which lifts the value's `$defs` to the root.
   - `llm`: `Quoted[A]` (parts joined by ` … `, a point marked by `‸`), `Matching` and `Anchoring`, which finds quotes in order and reports those it cannot. It must not depend on Iris, so that a browser plugin's page bundle can hold it.
   - `dom`: `Layout` (segments and lanes, from Themis), `Plan` (pure: what goes in the page), and `Passage`/`Decorator`/`Decoration`, which edit the page's own text nodes as Codeswitch's `Highlighter` did: edits found first and made from the end back, a page's node left in place (emptied) and joined back on restore, a gap for the space beside an emptied span.
-    - `Tooltip` (a popover in the top layer, its content in a shadow root, kept within the window and scrolling within itself, its content replaceable while open) and `Hovering` (shows it for the decorated element under the pointer, for the line of it, and keeps it open while the pointer crosses to it). Their geometry (`Box`, `Placement`) is pure, as jsdom measures every box as empty.
+    - `Tooltip` (a popover in the top layer, its content in a shadow root, kept within the window and scrolling within itself, its content replaceable while open) and `Hovering` (shows it for the decorated element under the pointer, or tapped, for the line of it, and keeps it open while the pointer crosses to it; if `focusable`, the elements take the focus, and Tab moves into the tooltip and back). An interactive `Tooltip` stops the pointer's events at its host, so the page's bubbling listeners never hear of them, though its capturing ones on the window and document still do. Their geometry (`Box`, `Placement`) is pure, as jsdom measures every box as empty.
 - Shared helpers for both uses that are not part of the format, such as `Script`, are `private[annotatedtextformat]` in the core.
 
 ### Gotchas
@@ -34,6 +34,8 @@ This is a Scala library that defines a common format for text annotated with typ
 - Case is folded character by character (`Matching.folded`), not by `(?i)`, which differs between the JVM and JavaScript.
 - `Colour` admits only the forms of a colour, since colours go into styles; never build a `Style.Layer` from a user's text.
 - jsdom's HTML parser turns `\r\n` into `\n`; put such text in with `createTextNode`.
+- jsdom has no `adoptedStyleSheets` and no `delegatesFocus`, nor does it move the focus by Tab itself; `Tooltip` copies a sheet's rules where it cannot adopt it, and `Hovering` moves the focus itself.
+- In the scalajs-dom facade, `HTMLElement.ownerDocument` is an `HTMLDocument`, with `activeElement` and `body`, but `Element.ownerDocument` only a `Document`; cast where needed.
 - In Scala.js, reading a JavaScript global that does not exist, as `js.Dynamic.global.CSS` in Node.js, throws; check it first with `js.typeOf(...)`, which compiles to `typeof`.
 - To try the library in another project before a release, `sbt 'set ThisBuild / version := "0.1.0-SNAPSHOT"' publishLocal`, and depend on that version.
 

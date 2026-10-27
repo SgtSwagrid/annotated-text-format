@@ -12,9 +12,16 @@ import scala.scalajs.js
   *
   * Its `host` is the element in the page. It takes the attribute `data-side`,
   * `above` or `below`, as it stands of the line it is for.
+  *
+  * The pointer's presses, clicks and moves within it, if it is `interactive`,
+  * go no further than it, so that the page does not act on them, and a press
+  * leaves the focus where it was, but in a field. The page's own listeners on
+  * its window or its document that capture events still hear of them first, as
+  * nothing within the page can stop them.
   */
 final class Tooltip private (
   val host: dom.HTMLElement,
+  root: js.Dynamic,
   body: dom.Element,
 ):
 
@@ -25,6 +32,15 @@ final class Tooltip private (
 
   /** The box that it covers, while it is open. */
   def box: Option[Box] = line.map(_ => Box.of(host.getBoundingClientRect()))
+
+  /** What within it takes the focus, in order: its links, buttons and fields. */
+  def focusables: List[dom.HTMLElement] =
+    val found = body.querySelectorAll(Tooltip.focusable)
+    (0 until found.length).toList.map(found(_).asInstanceOf[dom.HTMLElement])
+
+  /** What within it has the focus, if anything. */
+  def focused: Option[dom.Element] =
+    Option(root.activeElement.asInstanceOf[dom.Element])
 
   /** Shows `content` for `line`, the box of the line of text it is for. */
   def show(content: dom.Node, line: Box): Unit =
@@ -84,14 +100,16 @@ final class Tooltip private (
 object Tooltip:
 
   /**
-    * A tooltip for `document`, not yet in it, whose content is styled by the
-    * CSS `styles` within its shadow root, as `.card { padding: 8px }`, and
-    * which the pointer may move onto and use, unless not `interactive`.
+    * A tooltip for `document`, not yet in it, whose content is styled within
+    * its shadow root by the CSS `styles`, as `.card { padding: 8px }`, and by
+    * `sheets`, made for `document`, and which the pointer may move onto and
+    * use, unless not `interactive`.
     */
   def apply
     (
       document: dom.Document,
       styles: String = "",
+      sheets: Seq[dom.CSSStyleSheet] = Nil,
       interactive: Boolean = true,
     )
     : Tooltip =
@@ -103,13 +121,113 @@ object Tooltip:
     val body  = document.createElement("div")
     style.textContent = own(interactive) + styles
     root.appendChild(style)
+    adopt(root, document, sheets)
     root.appendChild(body)
     host.setAttribute("popover", "manual")
     host.setAttribute(Passage.decorated, "")
     host.setAttribute("hidden", "")
-    val tooltip = new Tooltip(host, body)
+    if interactive then keep(host)
+    val tooltip = new Tooltip(host, root, body)
     resizing(host, tooltip)
     tooltip
+
+  /**
+    * Styles what is within `root` by `sheets`, adopting them where the browser
+    * can, and else copying their rules, as where a page's script may not hand
+    * them to its document, as an extension's may not in some browsers.
+    */
+  private def adopt
+    (
+      root: js.Dynamic,
+      document: dom.Document,
+      sheets: Seq[dom.CSSStyleSheet],
+    )
+    : Unit = if sheets.nonEmpty then
+    if js.isUndefined(root.adoptedStyleSheets) || !adopting(root, sheets) then
+      sheets.foreach(sheet =>
+        val style = document.createElement("style")
+        style.textContent = (0 until sheet.cssRules.length)
+          .map(sheet.cssRules(_).cssText)
+          .mkString("\n")
+        root.appendChild(style),
+      )
+
+  /** Whether `root` adopts `sheets`, as the browser may refuse. */
+  private def adopting
+    (
+      root: js.Dynamic,
+      sheets: Seq[dom.CSSStyleSheet],
+    )
+    : Boolean =
+    try
+      root.adoptedStyleSheets = js.Array(sheets*)
+      true
+    catch case _: js.JavaScriptException => false
+
+  /**
+    * The pointer's events, which the page is not told of when they happen
+    * within the tooltip.
+    */
+  private val kept = List(
+    "pointerdown",
+    "pointerup",
+    "pointermove",
+    "mousedown",
+    "mouseup",
+    "mousemove",
+    "click",
+    "dblclick",
+    "touchstart",
+    "touchend",
+  )
+
+  /**
+    * Keeps the pointer's events within `host` from the page, and keeps a press
+    * there from taking the focus from the page, unless on a field, in which one
+    * may type.
+    */
+  private def keep(host: dom.HTMLElement): Unit = kept.foreach(kind =>
+    host.addEventListener(
+      kind,
+      (event: dom.Event) =>
+        event.stopPropagation()
+        if kind == "mousedown" && !typed(origin(event), host) then
+          event.preventDefault(),
+    ),
+  )
+
+  /** Where `event` happened, within a shadow root as well. */
+  private def origin(event: dom.Event): dom.EventTarget =
+    val path = event.asInstanceOf[js.Dynamic].composedPath
+    if js.typeOf(path) != "function" then event.target
+    else
+      event
+        .asInstanceOf[js.Dynamic]
+        .composedPath()
+        .asInstanceOf[js.Array[dom.EventTarget]]
+        .headOption
+        .getOrElse(event.target)
+
+  /**
+    * Whether `target` is a field, in which one may type, or `host` itself, as
+    * its scroll bar, which a press must not be kept from.
+    */
+  private def typed
+    (
+      target: dom.EventTarget,
+      host: dom.HTMLElement,
+    )
+    : Boolean = (target eq host) ||
+    js.typeOf(target.asInstanceOf[js.Dynamic].matches) ==
+      "function" && target.asInstanceOf[dom.Element].matches(field)
+
+  /** What takes typing. */
+  private val field =
+    "input, textarea, select, [contenteditable]:not([contenteditable='false'])"
+
+  /** What takes the focus. */
+  private val focusable =
+    "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type='hidden']), select:not([disabled]), textarea:not([disabled]), [contenteditable]:not([contenteditable='false']), [tabindex]:not([tabindex='-1'])"
 
   /**
     * Its own styles, which reset all that it inherits from the page, keep it

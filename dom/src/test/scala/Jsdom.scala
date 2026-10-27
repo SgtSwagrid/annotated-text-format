@@ -51,14 +51,65 @@ object Jsdom:
         .asInstanceOf[dom.Event],
     )
 
-  /** Presses the key `key` in `document`. */
-  def press(document: dom.Document, key: String): Unit =
+  /** Presses the key `key` in `document`, with Shift if `shift`. */
+  def press
+    (
+      document: dom.Document,
+      key: String,
+      shift: Boolean = false,
+    )
+    : Unit =
     val window = document.asInstanceOf[js.Dynamic].defaultView
     document.dispatchEvent(
       js.Dynamic
         .newInstance(window.KeyboardEvent)(
           "keydown",
-          js.Dynamic.literal(bubbles = true, key = key),
+          js.Dynamic
+            .literal(
+              bubbles = true,
+              cancelable = true,
+              key = key,
+              shiftKey = shift,
+            ),
+        )
+        .asInstanceOf[dom.Event],
+    )
+
+  /** Touches `node`, as a finger would, at `(x, y)` in the window. */
+  def tap(node: dom.Node, x: Double, y: Double): Unit =
+    val window = node.ownerDocument.asInstanceOf[js.Dynamic].defaultView
+    node.dispatchEvent(
+      js.Dynamic
+        .newInstance(window.PointerEvent)(
+          "pointerdown",
+          js.Dynamic
+            .literal(
+              bubbles = true,
+              composed = true,
+              pointerType = "touch",
+              clientX = x,
+              clientY = y,
+            ),
+        )
+        .asInstanceOf[dom.Event],
+    )
+
+  /**
+    * Sends `node` the event `kind`, as the pointer would, bubbling out of any
+    * shadow root it is in; and gives whether nothing prevented what it does.
+    */
+  def click(node: dom.Node, kind: String): Boolean =
+    val window = node.ownerDocument.asInstanceOf[js.Dynamic].defaultView
+    node.dispatchEvent(
+      js.Dynamic
+        .newInstance(window.MouseEvent)(
+          kind,
+          js.Dynamic
+            .literal(
+              bubbles = true,
+              cancelable = true,
+              composed = true,
+            ),
         )
         .asInstanceOf[dom.Event],
     )

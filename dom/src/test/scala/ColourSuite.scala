@@ -96,5 +96,9 @@ class ColourSuite extends FunSuite:
       .literal(supports = (_: String, _: String) => true)
     try
       assertEquals(Colour.parse("var(--a), junk"), None)
+      assertEquals(
+        Colour.parse("v\\61r(--a), junk"),
+        None,
+      )
       assert(Colour.parse("color-mix(in srgb, red 50%, blue)").isDefined)
     finally global.CSS = scala.scalajs.js.undefined

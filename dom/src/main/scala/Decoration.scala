@@ -137,6 +137,9 @@ final class Decoration[A] private (
   /** Whether it has been taken out of the page, after which it does nothing. */
   private var taken = false
 
+  /** Whether it has been taken out of the page. */
+  private[dom] def isRestored: Boolean = taken
+
   /**
     * Where the text nodes that `root` was split into lie: beneath it, or, if it
     * is a text node itself, beside it, in its parent.

@@ -507,3 +507,36 @@ class TooltipSuite extends FunSuite:
       "note-3",
     )
     hovering.stop()
+
+  test(
+    "A hovering lets go of decorations restored, but not of those yet to be shown",
+  ):
+    val page = Jsdom.element(
+      "<div><p>Ich stehe früh auf.</p><p>Er steht spät auf.</p></div>",
+    )
+    val document = page.ownerDocument
+    val apart    = document.createElement("p")
+    apart.textContent = "Sie steht auf."
+    val first = decorated(
+      page.firstElementChild,
+      List(Span(4, 9)),
+    )
+    val detached = decorated(apart, List(Span(4, 9)))
+    val tooltip  = Tooltip(document)
+    val hovering = Hovering[String](
+      tooltip,
+      (_, _) => Some(text(document, "get up")),
+      focusable = true,
+    )
+    hovering.add(first)
+    hovering.add(detached)
+    first.restore()
+    hovering.add(decorated(page.lastElementChild, List(Span(3, 8))))
+    page.appendChild(apart)
+    Jsdom.move(
+      detached.elements(0).head.firstChild,
+      0,
+      0,
+    )
+    assert(tooltip.isOpen)
+    hovering.stop()

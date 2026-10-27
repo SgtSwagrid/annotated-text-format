@@ -112,9 +112,12 @@ final class Hovering[A] private (
 
   window.addEventListener("resize", resized)
 
-  /** Covers `decoration` too, its annotations taking the focus if `focusable`. */
+  /**
+    * Covers `decoration` too, its annotations taking the focus if `focusable`,
+    * and no longer covers those since restored.
+    */
   def add(decoration: Decoration[A]): Unit =
-    covered.keys.filterNot(present).toList.foreach(remove)
+    covered.keys.filter(_.isRestored).toList.foreach(remove)
     if !covered.contains(decoration) then
       decoration.outermost.foreach(decorations.update(_, decoration))
       val stops =
@@ -145,14 +148,6 @@ final class Hovering[A] private (
         )
       then hide(),
     )
-
-  /**
-    * Whether any of `decoration` is still in the page, as it is not once it is
-    * restored.
-    */
-  private def present(decoration: Decoration[A]): Boolean = decoration
-    .outermost
-    .exists(_.isConnected)
 
   /** Covers no decoration. */
   def clear(): Unit = covered.keys.toList.foreach(remove)

@@ -1,34 +1,59 @@
 package com.alecdorrington.annotatedtextformat.dom
 
 import org.scalajs.dom
+import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.scalajs.js
 
 /**
-  * Shows `tooltip` with what `content` gives for the annotations of
-  * `decoration` under the pointer, for the line of the element under it. The
-  * tooltip stays open while the pointer crosses from that line to it, and while
-  * it is over it, so that its content may be scrolled or used; it closes as the
-  * pointer moves elsewhere, leaves the window, or the page scrolls beneath it,
-  * and on Escape.
+  * The annotations, by their indices in `decoration`, that a tooltip is shown
+  * for, as those in the highlighted element under the pointer.
+  */
+final case class Hovered[A]
+  (
+    decoration: Decoration[A],
+    annotations: List[Int],
+  ):
+
+  /** Their values, in order. */
+  def values: List[A] =
+    annotations.map(decoration.annotated.annotations(_).value)
+
+/**
+  * Shows `tooltip` with what `content` gives for the annotations under the
+  * pointer, of whichever decoration it covers, as they are added and removed,
+  * for the line of the element under it, within the page's open shadow roots
+  * too. `content` is given the showing that it is for, by which it may replace
+  * what it gave, as with an answer that comes later, which is dropped if the
+  * tooltip has since closed or moved on. The tooltip stays open while the
+  * pointer crosses from that line to it, and while it is over it, so that its
+  * content may be scrolled or used; it closes as the pointer moves elsewhere,
+  * leaves the window, or the page moves the line beneath it, and on Escape.
+  * While it is open, the element it is for is described by it.
   *
-  * A touch or a pen, which has no pointer to hover, shows it by a tap, and a
-  * tap elsewhere closes it. If `focusable`, each highlighted element takes the
-  * focus in its turn, as by Tab, showing the tooltip for its first line: Tab
-  * moves the focus on into the tooltip, if anything there takes it, and on from
-  * its last part back to the element, and so on beyond it; Shift and Tab moves
-  * from its first part back to the element; and Escape closes it, giving the
-  * focus back to the element. The elements of hidden annotations take the focus
-  * too, but show nothing.
+  * A touch or a pen, which has no pointer to hover, shows it by a tap, whose
+  * click goes no further, as to a link the element is in; and a tap on the
+  * element again, or elsewhere, closes it. If `focusable`, each annotation
+  * takes the focus in its turn, as by Tab, at the first of its elements that
+  * holds any text, showing the tooltip for its first line, which follows the
+  * line as the page moves: Tab moves the focus on into the tooltip, if anything
+  * there takes it, and on from its last part back to the element, and so on
+  * beyond it; Shift and Tab moves from its first part back to the element; and
+  * Escape closes it, giving the focus back to the element. Hidden annotations
+  * take the focus too, but show nothing.
+  *
+  * If `trusted`, it heeds only what the user does, not events that the page's
+  * scripts make.
   */
 final class Hovering[A] private (
-  decoration: Decoration[A],
   val tooltip: Tooltip,
-  content: List[Int] => Option[dom.Node],
+  content: (Hovered[A], Tooltip.Showing) => Option[dom.Node],
   focusable: Boolean,
+  trusted: Boolean,
 ):
 
-  /** The element the tooltip is for, and the line of it, while it is open. */
-  private var shown: Option[(dom.Element, Box)] = None
+  /** What the tooltip is for, while it is open. */
+  private var shown: Option[Shown] = None
 
   /** Whether the tooltip was opened by the focus, rather than the pointer. */
   private var focused = false
@@ -36,47 +61,122 @@ final class Hovering[A] private (
   /** Whether the focus is being given back, which shows nothing again. */
   private var quiet = false
 
+  /**
+    * Whether the pointer is a touch or a pen, whose moves the browser also
+    * gives as the mouse's, which show nothing.
+    */
+  private var touching = false
+
+  /** The element that a tap just showed the tooltip for, until its click. */
+  private var tapped: Option[dom.Element] = None
+
   private val document = tooltip.host.ownerDocument
 
-  private val listeners = List[(String, js.Function1[dom.Event, Unit])](
-    "mousemove"   -> (event => point(event.asInstanceOf[dom.MouseEvent])),
-    "pointerdown" -> (event => tap(event.asInstanceOf[dom.PointerEvent])),
-    "mouseout"    -> (event => if left(event) then hide()),
-    "scroll"      -> (event => if !within(event.target) then hide()),
-    "keydown"     -> (event => key(event.asInstanceOf[dom.KeyboardEvent])),
-    "focusin"     -> (event => focus(event.target)),
-    "focusout"    -> (event => blur(event.asInstanceOf[dom.FocusEvent])),
+  private val window = document
+    .asInstanceOf[dom.HTMLDocument]
+    .defaultView
+    .asInstanceOf[dom.EventTarget]
+
+  /**
+    * Each decoration covered, by the outermost elements that it placed in the
+    * page, so that the one an element is of is found from the element up.
+    */
+  private val decorations = mutable.HashMap.empty[dom.Node, Decoration[A]]
+
+  /**
+    * The decorations covered, each with the elements of it made to take the
+    * focus.
+    */
+  private val covered = mutable
+    .LinkedHashMap
+    .empty[Decoration[A], List[dom.Element]]
+
+  private val listeners = List(
+    on("mousemove")(event => point(event.asInstanceOf[dom.MouseEvent])),
+    on("pointermove")(event => sense(event.asInstanceOf[dom.PointerEvent])),
+    on("pointerdown")(event => tap(event.asInstanceOf[dom.PointerEvent])),
+    on("click")(click),
+    on("mouseout")(event => if left(event) then hide()),
+    on("scroll")(event => if !within(event.target) then relocate()),
+    on("keydown")(event => key(event.asInstanceOf[dom.KeyboardEvent])),
+    on("focusin")(event => focus(Tooltip.origin(event))),
+    on("focusout")(event => blur(event.asInstanceOf[dom.FocusEvent])),
   )
+
+  private val resized: js.Function1[dom.Event, Unit] =
+    event => if heard(event) then relocate()
 
   listeners.foreach((kind, listener) =>
     document.addEventListener(kind, listener, true),
   )
 
-  /** The highlighted elements made to take the focus, if `focusable`. */
-  private val stops: List[dom.Element] =
-    if !focusable then Nil
-    else
-      decoration
-        .annotated
-        .annotations
-        .indices
-        .toList
-        .flatMap(decoration.elements)
-        .distinct
-        .filterNot(_.hasAttribute("tabindex"))
+  window.addEventListener("resize", resized)
 
-  stops.foreach(_.setAttribute("tabindex", "0"))
+  /** Covers `decoration` too, its annotations taking the focus if `focusable`. */
+  def add(decoration: Decoration[A]): Unit =
+    if !covered.contains(decoration) then
+      decoration.outermost.foreach(decorations.update(_, decoration))
+      val stops =
+        if !focusable then Nil
+        else
+          decoration
+            .annotated
+            .annotations
+            .indices
+            .toList
+            .flatMap(decoration.elements(_).find(_.textContent.trim.nonEmpty))
+            .distinct
+            .filterNot(_.hasAttribute("tabindex"))
+      stops.foreach(_.setAttribute("tabindex", "0"))
+      covered.update(decoration, stops)
 
   /**
-    * Stops showing the tooltip, and closes it, the highlighted elements no
-    * longer taking the focus.
+    * No longer covers `decoration`, whose annotations no longer take the focus,
+    * closing the tooltip if it is for one of its elements.
     */
+  def remove(decoration: Decoration[A]): Unit = covered
+    .remove(decoration)
+    .foreach(stops =>
+      stops.foreach(_.removeAttribute("tabindex"))
+      decoration.outermost.foreach(decorations.remove)
+      if shown.exists(shown =>
+          decoration.outermost.exists(_.contains(shown.element)),
+        )
+      then hide(),
+    )
+
+  /** Covers no decoration. */
+  def clear(): Unit = covered.keys.toList.foreach(remove)
+
+  /** Stops showing the tooltip, covering no decoration, and closes it. */
   def stop(): Unit =
     listeners.foreach((kind, listener) =>
       document.removeEventListener(kind, listener, true),
     )
-    stops.foreach(_.removeAttribute("tabindex"))
+    window.removeEventListener("resize", resized)
+    clear()
     hide()
+
+  /** A listener to `kind`, heeding only the user's events if `trusted`. */
+  private def on
+    (kind: String)
+    (listener: dom.Event => Unit)
+    : (String, js.Function1[dom.Event, Unit]) = kind ->
+    (event => if heard(event) then listener(event))
+
+  private def heard(event: dom.Event): Boolean = !trusted || event.isTrusted
+
+  /**
+    * The decoration covered that `node` is within, with its highlighted element
+    * there, if any annotation is shown in it.
+    */
+  private def found(node: dom.Node): Option[(Decoration[A], dom.Element)] =
+    Iterator
+      .iterate(node)(_.parentNode)
+      .takeWhile(_ != null)
+      .flatMap(decorations.get)
+      .nextOption()
+      .flatMap(decoration => decoration.elementAt(node).map(decoration -> _))
 
   /**
     * Shows what is under the pointer: the tooltip for a highlighted element
@@ -84,42 +184,124 @@ final class Hovering[A] private (
     * once the pointer is beyond the line the tooltip is for and the tooltip,
     * unless the focus opened it.
     */
-  private def point(event: dom.MouseEvent): Unit =
-    val target = event.target.asInstanceOf[dom.Node]
-    decoration.elementAt(target) match
-      case Some(element) if shown.exists(_._1 eq element) => ()
-      case Some(element) if !within(target)               =>
-        content(decoration.at(target)).fold(hideBeyond(event))(node =>
-          show(
+  private def point(event: dom.MouseEvent): Unit = if !touching then
+    found(Tooltip.origin(event).asInstanceOf[dom.Node]) match
+      case Some((_, element)) if isShown(element) => ()
+      case Some((decoration, element))            =>
+        if !open(
+            decoration,
             element,
-            node,
             lineAt(element, event),
             byFocus = false,
-          ),
-        )
+          )
+        then hideBeyond(event)
       case _ => if !focused then hideBeyond(event)
 
-  /** Shows, for a touch or a pen, what is tapped, as the pointer would. */
+  /** Notes whether the pointer moving is a touch or a pen. */
+  private def sense(event: dom.PointerEvent): Unit =
+    touching = event.pointerType != "mouse"
+
+  /**
+    * Shows, for a touch or a pen, what is tapped, or closes the tooltip on a
+    * tap on what it is for again, or elsewhere.
+    */
   private def tap(event: dom.PointerEvent): Unit =
-    if event.pointerType == "touch" || event.pointerType == "pen" then
+    tapped = None
+    sense(event)
+    if touching then
       focused = false
-      point(event)
+      found(Tooltip.origin(event).asInstanceOf[dom.Node]) match
+        case Some((_, element)) if isShown(element) => hide()
+        case Some((decoration, element))            =>
+          if open(
+              decoration,
+              element,
+              lineAt(element, event),
+              byFocus = false,
+            )
+          then tapped = Some(element)
+          else hide()
+        case None => if !within(event.target) then hide()
+
+  /**
+    * Keeps the click of a tap that showed the tooltip from the page, as from a
+    * link that the element is in.
+    */
+  private def click(event: dom.Event): Unit =
+    tapped.foreach(element =>
+      if element.contains(Tooltip.origin(event).asInstanceOf[dom.Node]) then
+        event.preventDefault()
+        event.stopPropagation(),
+    )
+    tapped = None
 
   /** Shows the tooltip for the highlighted element given the focus, if any. */
   private def focus(target: dom.EventTarget): Unit =
     val node = target.asInstanceOf[dom.Node]
-    if !quiet && !within(target) then
-      decoration
-        .elementAt(node)
-        .filter(_ eq node)
-        .foreach(element =>
-          content(decoration.at(element)).foreach(show(
+    if !quiet then
+      found(node)
+        .filter(_._2 eq node)
+        .foreach((decoration, element) =>
+          open(
+            decoration,
             element,
-            _,
             firstLine(element),
             byFocus = true,
-          )),
+          ),
         )
+
+  /**
+    * Shows the tooltip for `element` of `decoration`, at `line`, if `content`
+    * gives anything for it; and gives whether it did.
+    */
+  private def open
+    (
+      decoration: Decoration[A],
+      element: dom.Element,
+      line: Box,
+      byFocus: Boolean,
+    )
+    : Boolean =
+    val showing = tooltip.next()
+    content(
+      Hovered(decoration, decoration.at(element)),
+      showing,
+    ) match
+      case Some(node) =>
+        undescribe()
+        shown = Some(Shown(
+          element,
+          line,
+          Box.lines(element).indexOf(line),
+        ))
+        focused = byFocus
+        tooltip.start(showing, node, line)
+        element.setAttribute("aria-describedby", tooltip.id)
+        true
+      case None => false
+
+  /**
+    * Follows the line the tooltip is for, as the page scrolls or the window
+    * changes size: placing the tooltip again for it, if the focus opened it, or
+    * else closing it, if the line moved from beneath the pointer.
+    */
+  private def relocate(): Unit = shown.foreach(shown =>
+    val now =
+      if !shown.element.isConnected then None
+      else
+        Some(
+          Box
+            .lines(shown.element)
+            .lift(shown.index)
+            .getOrElse(Box.of(shown.element.getBoundingClientRect())),
+        )
+    now match
+      case Some(line) if line == shown.line => ()
+      case Some(line) if focused            =>
+        this.shown = Some(shown.copy(line = line))
+        tooltip.follow(line)
+      case _ => hide(),
+  )
 
   /**
     * Closes the tooltip the focus opened, as the focus goes elsewhere than it
@@ -127,14 +309,18 @@ final class Hovering[A] private (
     */
   private def blur(event: dom.FocusEvent): Unit =
     val going = event.relatedTarget
-    if focused && !within(going) && !shown.exists(_._1 eq going) then hide()
+    if focused && !within(going) &&
+      !shown.exists(shown => holds(going, shown.element))
+    then hide()
 
   private def key(event: dom.KeyboardEvent): Unit = event.key match
-    case "Escape" => shown.foreach((element, _) =>
-        if within(document.activeElement) then giveBack(element)
+    case "Escape" => shown.foreach(shown =>
+        event.stopPropagation()
+        if active.exists(within) && shown.element.isConnected then
+          giveBack(shown.element)
         hide(),
       )
-    case "Tab" => shown.foreach((element, _) => tab(event, element))
+    case "Tab" => shown.foreach(shown => tab(event, shown.element))
     case _     => ()
 
   /**
@@ -150,10 +336,10 @@ final class Hovering[A] private (
     : Unit =
     val parts = tooltip.focusables
     if parts.nonEmpty then
-      if !event.shiftKey && (document.activeElement eq element) then
+      if !event.shiftKey && active.exists(_ eq element) then
         event.preventDefault()
         parts.head.focus()
-      else if within(document.activeElement) then
+      else if active.exists(within) then
         val at = tooltip.focused.fold(-1)(part => parts.indexWhere(_ eq part))
         if event.shiftKey && at == 0 then
           event.preventDefault()
@@ -168,17 +354,39 @@ final class Hovering[A] private (
     try element.asInstanceOf[dom.HTMLElement].focus()
     finally quiet = false
 
-  private def show
+  /**
+    * The element that has the focus, within the page's open shadow roots too,
+    * but not within the tooltip's.
+    */
+  private def active: Option[dom.Element] =
+    @tailrec
+    def inner(element: dom.Element): dom.Element =
+      val root = element.asInstanceOf[js.Dynamic].shadowRoot
+      if (element eq tooltip.host) || js.isUndefined(root) || (root: Any) ==
+          null || (root.activeElement: Any) == null
+      then element
+      else inner(root.activeElement.asInstanceOf[dom.Element])
+    Option(document.asInstanceOf[dom.HTMLDocument].activeElement).map(inner)
+
+  /** Whether `target` is `element`, or holds it, within shadow roots too. */
+  private def holds
     (
-      element: dom.Element,
-      node: dom.Node,
-      line: Box,
-      byFocus: Boolean,
+      target: dom.EventTarget,
+      element: dom.Node,
     )
-    : Unit =
-    shown = Some(element -> line)
-    focused = byFocus
-    tooltip.show(node, line)
+    : Boolean = Iterator
+    .iterate(element)(node =>
+      Option(node.parentNode).getOrElse(
+        if node.nodeType == Passage.fragmentNode then
+          node.asInstanceOf[js.Dynamic].host.asInstanceOf[dom.Node]
+        else null,
+      ),
+    )
+    .takeWhile(node => node != null && !js.isUndefined(node))
+    .exists(_ eq target)
+
+  private def isShown(element: dom.Element): Boolean =
+    shown.exists(_.element eq element)
 
   /** The line of `element` that `event` is on, or nearest to. */
   private def lineAt
@@ -209,7 +417,7 @@ final class Hovering[A] private (
     * for and the tooltip, across which the pointer crosses to it.
     */
   private def bridged(x: Double, y: Double): Boolean = shown
-    .flatMap((_, line) => tooltip.box.map(line.hull))
+    .flatMap(shown => tooltip.box.map(shown.line.hull))
     .exists(_.contains(x, y))
 
   /** Whether `target` is the tooltip, or within it. */
@@ -222,23 +430,40 @@ final class Hovering[A] private (
     .asInstanceOf[dom.MouseEvent]
     .relatedTarget == null
 
+  /** Stops describing the element the tooltip was for by it. */
+  private def undescribe(): Unit =
+    shown.foreach(_.element.removeAttribute("aria-describedby"))
+
   private def hide(): Unit =
+    undescribe()
     shown = None
     focused = false
     tooltip.hide()
 
+/**
+  * The highlighted `element` that a tooltip is for, and the `line` of it, the
+  * `index`th of its lines, if it is one.
+  */
+private final case class Shown
+  (
+    element: dom.Element,
+    line: Box,
+    index: Int,
+  )
+
 object Hovering:
 
   /**
-    * Shows `tooltip` with what `content` gives for the annotations, by their
-    * indices, of `decoration` under the pointer, or tapped, or, if `focusable`,
-    * given the focus, until it is stopped.
+    * Shows `tooltip` with what `content` gives for the annotations under the
+    * pointer, or tapped, or, if `focusable`, given the focus, of the
+    * decorations added to it, until it is stopped, heeding only the user's
+    * events if `trusted`.
     */
   def apply[A]
     (
-      decoration: Decoration[A],
       tooltip: Tooltip,
-      content: List[Int] => Option[dom.Node],
+      content: (Hovered[A], Tooltip.Showing) => Option[dom.Node],
       focusable: Boolean = false,
+      trusted: Boolean = false,
     )
-    : Hovering[A] = new Hovering(decoration, tooltip, content, focusable)
+    : Hovering[A] = new Hovering(tooltip, content, focusable, trusted)

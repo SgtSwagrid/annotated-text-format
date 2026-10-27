@@ -7,16 +7,25 @@ import scala.scalajs.js
   * A tooltip in a page's top layer, where no part of the page can clip or cover
   * it, holding any content in a shadow root, which the page's styles do not
   * reach. It is kept within the window, and content too large for it scrolls
-  * within it. Its content may be replaced while it is open, as by an entry that
+  * within it. Each time it is shown is a [[Tooltip.Showing]] of its own, by
+  * which its content may be replaced while it lasts, as by an entry that
   * arrives later, and it is placed again as its size changes.
   *
-  * Its `host` is the element in the page. It takes the attribute `data-side`,
-  * `above` or `below`, as it stands of the line it is for.
+  * Its `host` is the element in the page, an `atf-tooltip`, which no rule of
+  * the page for its own elements matches, with an `id` of its own, by which
+  * what it is for is described, and the role of a dialog if it is
+  * `interactive`, or else of a tooltip. It takes the attribute `data-side`,
+  * `above` or `below`, as it stands of the line it is for. It goes at the root
+  * of the page, or in the modal dialog open, outside which all is inert.
   *
-  * The pointer's presses, clicks and moves within it, if it is `interactive`,
-  * go no further than it, so that the page does not act on them, and a press
-  * leaves the focus where it was, but in a field. The page's own listeners on
-  * its window or its document that capture events still hear of them first, as
+  * Its content inherits nothing from the page, so its styles must set its font,
+  * its colours and its background.
+  *
+  * The pointer's presses, clicks and moves within it, and keys typed in it, if
+  * it is `interactive`, go no further than it, so that the page does not act on
+  * them, and a press leaves the focus where it was, but in a field, so that its
+  * text cannot be selected by the pointer. The page's own listeners on its
+  * window or its document that capture events still hear of them first, as
   * nothing within the page can stop them.
   */
 final class Tooltip private (
@@ -26,6 +35,15 @@ final class Tooltip private (
 ):
 
   private var line: Option[Box] = None
+
+  /** What it shows, while it is open. */
+  private var current: Option[Tooltip.Showing] = None
+
+  /** What places it again as its size changes, where the browser can tell. */
+  private var observer: Option[js.Dynamic] = None
+
+  /** The `id` of its host, by which what it is for is described. */
+  def id: String = host.id
 
   /** Whether it is open. */
   def isOpen: Boolean = line.isDefined
@@ -42,27 +60,50 @@ final class Tooltip private (
   def focused: Option[dom.Element] =
     Option(root.activeElement.asInstanceOf[dom.Element])
 
-  /** Shows `content` for `line`, the box of the line of text it is for. */
-  def show(content: dom.Node, line: Box): Unit =
+  /**
+    * Shows `content` for `line`, the box of the line of text it is for, as a
+    * showing of its own, by which it may be replaced until the tooltip closes
+    * or shows something else.
+    */
+  def show(content: dom.Node, line: Box): Tooltip.Showing =
+    val showing = next()
+    start(showing, content, line)
+    showing
+
+  /** A showing to come, which shows nothing until it is started. */
+  private[dom] def next(): Tooltip.Showing = new Tooltip.Showing(this)
+
+  /** Shows `content` for `line` as `showing`. */
+  private[dom] def start
+    (
+      showing: Tooltip.Showing,
+      content: dom.Node,
+      line: Box,
+    )
+    : Unit =
     fill(content)
     this.line = Some(line)
+    current = Some(showing)
     open()
     fit()
 
-  /** Shows `content` in place of what it shows, where it stands. */
-  def update(content: dom.Node): Unit =
-    fill(content)
+  /** Places it for `line`, as after the line has moved, if it is open. */
+  private[dom] def follow(line: Box): Unit = if isOpen then
+    this.line = Some(line)
     fit()
 
   /** Closes it, keeping it in the page to open again. */
   def hide(): Unit =
     line = None
+    current = None
     host.setAttribute("hidden", "")
     Tooltip.popover(host).foreach(_.hidePopover())
 
   /** Takes it out of the page. */
   def remove(): Unit =
     hide()
+    observer.foreach(_.disconnect())
+    observer = None
     Option(host.parentNode).foreach(_.removeChild(host))
 
   private def fill(content: dom.Node): Unit =
@@ -71,8 +112,8 @@ final class Tooltip private (
 
   /** Puts it in the top layer, if it is not there. */
   private def open(): Unit =
-    if !host.isConnected then
-      host.ownerDocument.documentElement.appendChild(host)
+    val container = Tooltip.container(host.ownerDocument)
+    if !(host.parentNode eq container) then container.appendChild(host)
     host.removeAttribute("hidden")
     Tooltip
       .popover(host)
@@ -100,10 +141,31 @@ final class Tooltip private (
 object Tooltip:
 
   /**
+    * One showing of `tooltip`: what it shows from when it opens for a line,
+    * until it closes or shows something else.
+    */
+  final class Showing private[dom] (tooltip: Tooltip):
+
+    /** Whether the tooltip still shows it. */
+    def isCurrent: Boolean = tooltip.current.exists(_ eq this)
+
+    /**
+      * Shows `content` in its place, where it stands, if the tooltip still
+      * shows it, or else nothing, as for an answer come too late; and gives
+      * whether it did.
+      */
+    def update(content: dom.Node): Boolean = isCurrent && {
+      tooltip.fill(content)
+      tooltip.fit()
+      true
+    }
+
+  /**
     * A tooltip for `document`, not yet in it, whose content is styled within
     * its shadow root by the CSS `styles`, as `.card { padding: 8px }`, and by
     * `sheets`, made for `document`, and which the pointer may move onto and
-    * use, unless not `interactive`.
+    * use, unless not `interactive`, when it is named `label`, as for a reader
+    * of the screen. Its shadow root is `closed` to the page's scripts if so.
     */
   def apply
     (
@@ -111,12 +173,23 @@ object Tooltip:
       styles: String = "",
       sheets: Seq[dom.CSSStyleSheet] = Nil,
       interactive: Boolean = true,
+      label: String = "",
+      closed: Boolean = false,
     )
     : Tooltip =
-    val host = document.createElement("div").asInstanceOf[dom.HTMLElement]
+    val host = document.createElement(tag).asInstanceOf[dom.HTMLElement]
     val root = host
       .asInstanceOf[js.Dynamic]
-      .attachShadow(js.Dynamic.literal(mode = "open"))
+      .attachShadow(
+        js.Dynamic.literal(mode = if closed then "closed" else "open"),
+      )
+    made += 1
+    host.id = s"$tag-$made"
+    host.setAttribute(
+      "role",
+      if interactive then "dialog" else "tooltip",
+    )
+    if label.nonEmpty then host.setAttribute("aria-label", label)
     val style = document.createElement("style")
     val body  = document.createElement("div")
     style.textContent = own(interactive) + styles
@@ -128,8 +201,25 @@ object Tooltip:
     host.setAttribute("hidden", "")
     if interactive then keep(host)
     val tooltip = new Tooltip(host, root, body)
-    resizing(host, tooltip)
+    tooltip.observer = resizing(host, tooltip)
     tooltip
+
+  /** The name of the host's element. */
+  private val tag = "atf-tooltip"
+
+  /** How many tooltips have been made, for their `id`s. */
+  private var made = 0
+
+  /**
+    * Where a tooltip of `document` goes: in the modal dialog open, topmost,
+    * outside which all is inert, or else at its root.
+    */
+  private def container(document: dom.Document): dom.Node =
+    val modals =
+      try document.querySelectorAll("dialog:modal")
+      catch case _: js.JavaScriptException => null
+    if modals == null || modals.length == 0 then document.documentElement
+    else modals(modals.length - 1)
 
   /**
     * Styles what is within `root` by `sheets`, adopting them where the browser
@@ -144,13 +234,26 @@ object Tooltip:
     )
     : Unit = if sheets.nonEmpty then
     if js.isUndefined(root.adoptedStyleSheets) || !adopting(root, sheets) then
-      sheets.foreach(sheet =>
-        val style = document.createElement("style")
-        style.textContent = (0 until sheet.cssRules.length)
+      sheets
+        .flatMap(rules)
+        .foreach(rules =>
+          val style = document.createElement("style")
+          style.textContent = rules
+          root.appendChild(style),
+        )
+
+  /**
+    * The rules of `sheet`, if they may be read, as those of a sheet of another
+    * origin may not.
+    */
+  private def rules(sheet: dom.CSSStyleSheet): Option[String] =
+    try
+      Some(
+        (0 until sheet.cssRules.length)
           .map(sheet.cssRules(_).cssText)
-          .mkString("\n")
-        root.appendChild(style),
+          .mkString("\n"),
       )
+    catch case _: js.JavaScriptException => None
 
   /** Whether `root` adopts `sheets`, as the browser may refuse. */
   private def adopting
@@ -165,10 +268,15 @@ object Tooltip:
     catch case _: js.JavaScriptException => false
 
   /**
-    * The pointer's events, which the page is not told of when they happen
-    * within the tooltip.
+    * The pointer's events and the keys', which the page is not told of when
+    * they happen within the tooltip.
     */
   private val kept = List(
+    "keydown",
+    "keyup",
+    "keypress",
+    "beforeinput",
+    "input",
     "pointerdown",
     "pointerup",
     "pointermove",
@@ -197,7 +305,7 @@ object Tooltip:
   )
 
   /** Where `event` happened, within a shadow root as well. */
-  private def origin(event: dom.Event): dom.EventTarget =
+  private[dom] def origin(event: dom.Event): dom.EventTarget =
     val path = event.asInstanceOf[js.Dynamic].composedPath
     if js.typeOf(path) != "function" then event.target
     else
@@ -237,6 +345,7 @@ object Tooltip:
   private def own(interactive: Boolean): String =
     s""":host { all: initial; display: block; position: fixed; inset: auto; margin: 0; padding: 0; border: 0; background: none; box-sizing: border-box; max-width: calc(100vw - ${ 2 *
         Placement.margin }px); max-height: calc(100vh - ${ 2 *
+        Placement.margin }px); max-height: calc(100dvh - ${ 2 *
         Placement.margin }px); overflow: auto;${
         if interactive then "" else " pointer-events: none;"
       } }
@@ -247,18 +356,22 @@ object Tooltip:
     * Places `tooltip` again whenever its size changes, where the browser can
     * tell.
     */
-  private def resizing(host: dom.HTMLElement, tooltip: Tooltip): Unit =
+  private def resizing
+    (host: dom.HTMLElement, tooltip: Tooltip)
+    : Option[js.Dynamic] =
     val window = host
       .ownerDocument
       .asInstanceOf[dom.HTMLDocument]
       .defaultView
       .asInstanceOf[js.Dynamic]
-    if !js.isUndefined(window.ResizeObserver) then
-      js.Dynamic
+    Option.when(!js.isUndefined(window.ResizeObserver)):
+      val observer = js
+        .Dynamic
         .newInstance(window.ResizeObserver)((_: js.Any, _: js.Any) =>
           tooltip.fit(),
         )
-        .observe(host)
+      observer.observe(host)
+      observer
 
   /** The popover of `host`, where the browser has popovers. */
   private def popover(host: dom.HTMLElement): Option[Popover] = Option.when(

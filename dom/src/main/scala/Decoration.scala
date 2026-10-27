@@ -121,6 +121,9 @@ final class Decoration[A] private (
   private def placedAt(node: dom.Node): Option[Placed[A]] =
     placed.find(_.element.contains(node))
 
+  /** The outermost element in the page of each piece that it placed there. */
+  private[dom] def outermost: Vector[dom.Element] = placed.map(_.element)
+
   /**
     * Takes every annotation out of the page, putting back the text that each
     * took the place of, and joining each text node of the page back together.
@@ -315,7 +318,7 @@ private object Forcing:
     val sheet = document(root).createElement("style")
     sheet.id = id(prefix)
     sheet.textContent =
-      s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } }"
+      s"@media (forced-colors: active) { .$prefix:not(.$prefix-hidden) { text-decoration: underline 2px; } } .$prefix:focus-visible { outline: 2px solid; outline-offset: 1px; }"
     container.appendChild(sheet)
     sheet
 

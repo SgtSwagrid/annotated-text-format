@@ -46,7 +46,13 @@ object Jsdom:
       js.Dynamic
         .newInstance(window.MouseEvent)(
           "mousemove",
-          js.Dynamic.literal(bubbles = true, clientX = x, clientY = y),
+          js.Dynamic
+            .literal(
+              bubbles = true,
+              composed = true,
+              clientX = x,
+              clientY = y,
+            ),
         )
         .asInstanceOf[dom.Event],
     )

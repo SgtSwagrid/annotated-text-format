@@ -67,14 +67,18 @@ object Box:
     val rects = element.getClientRects()
     List.tabulate(rects.length)(index => of(rects(index)))
 
-  /** The box of the window that `document` is shown in. */
+  /**
+    * The box of the window that `document` is shown in, but its scroll bars,
+    * which a tooltip must not sit beneath.
+    */
   def window(document: dom.Document): Box =
+    val root   = document.documentElement
     val window = document.asInstanceOf[dom.HTMLDocument].defaultView
     Box(
       0,
       0,
-      window.innerWidth,
-      window.innerHeight,
+      if root.clientWidth > 0 then root.clientWidth else window.innerWidth,
+      if root.clientHeight > 0 then root.clientHeight else window.innerHeight,
     )
 
 /** Where a tooltip stands of what it is for. */

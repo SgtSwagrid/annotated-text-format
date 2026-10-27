@@ -7,26 +7,110 @@ import org.scalajs.dom
 
 /**
   * A stretch of a page, beneath `root`: its text nodes, and the elements within
-  * it that are not prose, as code, or a decoration's own, each of which stands
-  * in its `text` as one [[Passage.placeholder]], so that the text on either
-  * side of it is not taken as side by side. Each `<br>`, and each boundary
-  * between blocks within it, as paragraphs, stands in its `text` as a line
-  * break. Annotations of the passage are of its `text`.
+  * it that are not prose, as code, each of which stands in its `text` as one
+  * [[Passage.placeholder]], so that the text on either side of it is not taken
+  * as side by side. An element that a decoration put there stands as the text
+  * it shows, as a translation, so that a page decorated a piece at a time reads
+  * as it is seen, though nothing within it may be annotated again. Each `<br>`,
+  * and each boundary between blocks within it, as paragraphs, stands in its
+  * `text` as a line break. Annotations of the passage are of its `text`.
   */
 final class Passage private (
   val root: dom.Node,
   parts: Vector[Passage.Part],
 ):
 
-  /** Its text: that of its text nodes, and a placeholder for each element. */
+  /**
+    * Its text: that of its text nodes, what each element of a decoration shows,
+    * and a placeholder for each other element.
+    */
   val text: String = parts.map(_.text).mkString
+
+  /**
+    * Its text as the page held it before any decoration: that of its text
+    * nodes, what each element of a decoration took the place of, and a
+    * placeholder for each other element, as for the words around a passage. Its
+    * offsets are not those of [[text]].
+    */
+  val original: String = parts.map(_.original).mkString
+
+  /** Where each of its parts begins in [[text]]. */
+  private val starts = parts.scanLeft(0)(_ + _.text.length)
 
   /** Its text nodes, each with its span in [[text]]. */
   private[dom] val texts: Vector[(dom.Text, Span)] = parts
-    .zip(parts.scanLeft(0)(_ + _.text.length))
+    .zip(starts)
     .collect { case (Passage.Part.Prose(node), start) =>
       node -> Span(start, start + node.data.length)
     }
+
+  /**
+    * The spans in [[text]] of its elements that are not prose, those of
+    * decorations among them, within which nothing is annotated.
+    */
+  private[dom] val atoms: Vector[Span] = parts
+    .zip(starts)
+    .collect { case (part @ Passage.Part.Atom(_), start) =>
+      Span(start, start + part.text.length)
+    }
+
+  /**
+    * Where `offset` within `node` lies in its text, if `node` is one of its
+    * text nodes, or an element whose child at `offset`, or else whose end, is
+    * at one.
+    */
+  def offsetOf(node: dom.Node, offset: Int): Option[Int] =
+    if node.nodeType == Passage.textNode then
+      texts.collectFirst {
+        case (text, span) if text eq node =>
+          span.start + offset.max(0).min(text.data.length)
+      }
+    else
+      val nodes = node.childNodes
+      if offset < nodes.length then first(nodes(offset)).flatMap(offsetOf(_, 0))
+      else last(node).flatMap(text => offsetOf(text, text.data.length))
+
+  /**
+    * The span in its text of `range`, as of what the reader selects, if both
+    * its ends are at its text nodes.
+    */
+  def spanOf(range: dom.Range): Option[Span] =
+    for
+      start <- offsetOf(
+        range.startContainer,
+        range.startOffset,
+      )
+      end <- offsetOf(range.endContainer, range.endOffset) if start <= end
+    yield Span(start, end)
+
+  /**
+    * A range of the page over `span` of its text, if both its ends are at its
+    * text nodes: the start at the start of the text after it, and the end at
+    * the end of the text before it, or at either, at a point.
+    */
+  def rangeOf(span: Span): Option[dom.Range] =
+    for
+      (startNode, start) <-
+        at(span.start, after = false).orElse(at(span.start, after = true))
+      (endNode, end) <-
+        at(span.end, after = true).orElse(at(span.end, after = false))
+    yield
+      val range = document.createRange()
+      range.setStart(startNode, start)
+      range.setEnd(endNode, end)
+      range
+
+  /** The first of its text nodes within or after `node`, in order. */
+  private def first(node: dom.Node): Option[dom.Text] = texts
+    .map(_._1)
+    .find(text =>
+      (text eq node) || node.contains(text) || Passage.follows(text, node),
+    )
+
+  /** The last of its text nodes within `node`. */
+  private def last(node: dom.Node): Option[dom.Text] = texts
+    .map(_._1)
+    .findLast(text => node.contains(text))
 
   /** `annotations` of its text, if they fit it, or else what is wrong. */
   def annotate[A]
@@ -70,7 +154,10 @@ object Passage:
   /** What stands for an element in a passage's text, of which none is prose. */
   val placeholder: Char = '\ufffc'
 
-  /** The attribute held by every element that a decoration puts in a page. */
+  /**
+    * The attribute held by every element that a decoration puts in a page,
+    * whose value is the text it took the place of, if any.
+    */
   val decorated: String = "data-annotated-text"
 
   /**
@@ -95,9 +182,17 @@ object Passage:
     case Break
 
     def text: String = this match
-      case Prose(node) => node.data
-      case Atom(_)     => placeholder.toString
-      case Break       => "\n"
+      case Prose(node)   => node.data
+      case Atom(element) =>
+        if element.hasAttribute(decorated) then element.textContent
+        else placeholder.toString
+      case Break => "\n"
+
+    /** Its text before any decoration. */
+    def original: String = this match
+      case Atom(element) if element.hasAttribute(decorated) =>
+        element.getAttribute(decorated)
+      case _ => text
 
   /**
     * The parts beneath `root`, or of it, if it is a text node itself, a break
@@ -227,6 +322,14 @@ object Passage:
     )
     : Boolean = element.hasAttribute(decorated) || nonProse(element) ||
     skip(element)
+
+  /** Whether `node` comes after `other` in the page, and not within it. */
+  private def follows(node: dom.Node, other: dom.Node): Boolean =
+    (other.compareDocumentPosition(node) & following) != 0 &&
+    !other.contains(node)
+
+  /** What `compareDocumentPosition` gives for a node that follows. */
+  private val following = 4
 
   /** The children of `node`, in order. */
   private[dom] def children(node: dom.Node): List[dom.Node] =

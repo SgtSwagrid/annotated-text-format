@@ -46,17 +46,25 @@ private[dom] object Plan:
     * text is in runs at `texts`, as a page's text nodes are. A wrapped span
     * crossing from one run to another is wrapped in each, its replacement shown
     * in the first, and none of what lies outside them is wrapped. A point
-    * within a replaced span, which has no place in what it shows, is left out.
+    * within a replaced span, which has no place in what it shows, is left out,
+    * and so are the annotations `skipped`, by their indices.
     */
   def of[A]
     (
       annotated: AnnotatedText[A],
       look: Look[A],
       texts: List[Span],
+      skipped: Set[Int] = Set.empty,
     )
     : List[Piece[A]] =
-    val segments = Layout.of(annotated)
-    val replaced = replacements(annotated, look)
+    val segments = Layout
+      .of(annotated)
+      .map(segment =>
+        segment.copy(marks =
+          segment.marks.filterNot(mark => skipped(mark.annotation)),
+        ),
+      )
+    val replaced = replacements(annotated, look, skipped)
     val wraps    = wrapped(segments, replaced)
     val points   = segments.filter(segment =>
       segment.span.isPoint &&
@@ -77,10 +85,12 @@ private[dom] object Plan:
     (
       annotated: AnnotatedText[A],
       look: Look[A],
+      skipped: Set[Int],
     )
     : List[(Span, Replacement)] = annotated
     .annotations
     .zipWithIndex
+    .filterNot((_, index) => skipped(index))
     .flatMap((annotation, index) =>
       annotation
         .spans

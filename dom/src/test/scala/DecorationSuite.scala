@@ -628,3 +628,104 @@ class DecorationSuite extends FunSuite:
       document.querySelectorAll("#atf-forced-colours").length,
       0,
     )
+
+  test("A page decorated a piece at a time reads as it is seen"):
+    val page = Jsdom.element(
+      "<div><p>Ich stehe früh auf.</p><p>Er steht spät auf.</p></div>",
+    )
+    val before = page.innerHTML
+    val first  = decorate(
+      page,
+      translated,
+      Annotation(List(Span(4, 9)), List("stand")),
+    )
+    val passage = Passage(page)
+    assertEquals(
+      passage.text,
+      "Ich stand früh auf.\nEr steht spät auf.",
+    )
+    assertEquals(
+      passage.original,
+      "Ich stehe früh auf.\nEr steht spät auf.",
+    )
+    val second = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(
+            Annotation(List(Span(23, 28)), List("stands")),
+            Annotation(List(Span(6, 12)), List("x")),
+          ))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(second.unplaced, Set(1))
+    assertEquals(second.elements(1), Nil)
+    assertEquals(
+      Passage(page).text,
+      "Ich stand früh auf.\nEr stands spät auf.",
+    )
+    second.restore()
+    first.restore()
+    assertEquals(page.innerHTML, before)
+
+  test("A point with no text beside it is not placed whole"):
+    val paragraph  = Jsdom.element("<p><input></p>")
+    val passage    = Passage(paragraph)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(Annotation(List(Span.point(0)), List("here"))))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(decoration.unplaced, Set(0))
+
+  test("Each text node split is told of, with what was split off it"):
+    val paragraph = Jsdom.element("<p>She always is late.</p>")
+    val passage   = Passage(paragraph)
+    var splits    = List.empty[(String, String)]
+    Decorator
+      .decorate(
+        passage,
+        passage.annotate(List(Annotation(List(Span(4, 10)), "x"))).toOption.get,
+        kept,
+        split = (node, rest) => splits :+= (node.data -> rest.data),
+      )
+      .toOption
+      .get
+    assertEquals(
+      splits,
+      List(
+        "She always" -> " is late.",
+        "She "       -> "always",
+      ),
+    )
+
+  test("The classes that a look gives are on its elements while shown"):
+    val paragraph = Jsdom.element("<p>She always is late.</p>")
+    val look      = Look[String](
+      _ => Colour("teal"),
+      classes = value => List(value, "two words"),
+    )
+    val decoration = decorate(
+      paragraph,
+      look,
+      Annotation(List(Span(4, 10)), "known"),
+    )
+    val element = decoration.elements(0).head
+    assert(element.classList.contains("known"))
+    assert(!element.classList.contains("two"))
+    decoration.hide(0)
+    assert(!element.classList.contains("known"))
+    decoration.show(0)
+    assert(element.classList.contains("known"))

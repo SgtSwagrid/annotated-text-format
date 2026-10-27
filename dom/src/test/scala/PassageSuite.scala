@@ -1,5 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
+import com.alecdorrington.annotatedtextformat.Span
 import munit.FunSuite
 import org.scalajs.dom
 
@@ -47,3 +48,24 @@ class PassageSuite extends FunSuite:
     val document = Jsdom.element("<p>Hi</p>").ownerDocument
     document.asInstanceOf[dom.HTMLDocument].title = "Title"
     assert(!Passage(document).text.contains("Title"))
+
+  test("Offsets in a page's nodes and ranges map to the passage's text"):
+    val paragraph = Jsdom.element("<p>Ich <em>stehe</em> auf.</p>")
+    val passage   = Passage(paragraph)
+    val em        = paragraph.childNodes(1)
+    assertEquals(
+      passage.offsetOf(em.firstChild, 2),
+      Some(6),
+    )
+    assertEquals(passage.offsetOf(paragraph, 1), Some(4))
+    assertEquals(
+      passage.offsetOf(paragraph, 3),
+      Some(14),
+    )
+    val range = passage.rangeOf(Span(4, 9)).get
+    assertEquals(range.toString(), "stehe")
+    assertEquals(passage.spanOf(range), Some(Span(4, 9)))
+    assertEquals(
+      passage.rangeOf(Span(4, 9)).flatMap(passage.spanOf),
+      Some(Span(4, 9)),
+    )

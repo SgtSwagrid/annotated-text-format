@@ -315,6 +315,7 @@ object Tooltip:
     "mousemove",
     "click",
     "dblclick",
+    "contextmenu",
     "touchstart",
     "touchend",
   )

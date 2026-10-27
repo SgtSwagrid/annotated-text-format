@@ -1,7 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.AnnotatedText
+import com.alecdorrington.annotatedtextformat.{AnnotatedText, Span}
 import org.scalajs.dom
+import scala.collection.mutable
 import scala.scalajs.js
 
 /**
@@ -23,6 +24,12 @@ object Decorator:
     * own colours, which takes backgrounds away, it underlines the text. It is
     * refused if the annotations are of another text, or if `prefix` could not
     * begin a class's name as it is, unescaped in a selector.
+    *
+    * If `whole`, an annotation is put in only if all of it can be, as it cannot
+    * be over what is not prose, or another decoration, nor at a point with no
+    * text beside it; the rest are its `unplaced`. Each text node of the page
+    * that it splits, it tells `split` of, with the node split off it, as an
+    * application marking the page's nodes may copy its mark.
     */
   def decorate[A]
     (
@@ -30,19 +37,26 @@ object Decorator:
       annotated: AnnotatedText[A],
       look: Look[A],
       prefix: String = "atf",
+      whole: Boolean = false,
+      split: (dom.Text, dom.Text) => Unit = (_, _) => (),
     )
     : Either[Refusal, Decoration[A]] =
     if !named(prefix) then Left(Refusal.Unnamed(prefix))
     else if annotated.text != passage.text then Left(Refusal.OtherText)
-    else Right(Decoration.make(passage, annotated, look, prefix))
+    else
+      Right(Decoration.make(
+        passage,
+        annotated,
+        look,
+        prefix,
+        whole,
+        split,
+      ))
 
-  /**
-    * Whether `prefix` may begin a class's name as it is, unescaped in a
-    * selector.
-    */
-  private def named(prefix: String): Boolean = """[a-zA-Z_][a-zA-Z0-9_-]*"""
+  /** Whether `name` may begin a class's name as it is, unescaped in a selector. */
+  private[dom] def named(name: String): Boolean = """[a-zA-Z_][a-zA-Z0-9_-]*"""
     .r
-    .matches(prefix)
+    .matches(name)
 
 /** Why annotations could not be put into a page. */
 enum Refusal:
@@ -65,6 +79,7 @@ enum Refusal:
   */
 final class Decoration[A] private (
   val annotated: AnnotatedText[A],
+  val unplaced: Set[Int],
   passage: Passage,
   placed: Vector[Placed[A]],
   origins: Origins,
@@ -77,6 +92,9 @@ final class Decoration[A] private (
 
   /** The annotations lit, as the pointer is over one of their elements. */
   private var lit = Set.empty[Int]
+
+  /** The classes from `look` that each highlighted element has been given. */
+  private val classed = mutable.HashMap.empty[dom.Element, Set[String]]
 
   /** Whether the annotation at `annotation` is shown. */
   def isShown(annotation: Int): Boolean = !hidden.contains(annotation)
@@ -198,8 +216,19 @@ final class Decoration[A] private (
         List(mark).filter(mark => isShown(mark.annotation)),
       )
 
-  /** Highlights `each` under `marks`, or takes its highlight away if none. */
+  /**
+    * Highlights `each` under `marks`, or takes its highlight away if none,
+    * giving it the classes that `look` gives their annotations.
+    */
   private def draw(each: Placed[A], marks: List[Mark[A]]): Unit =
+    val classes = marks
+      .flatMap(mark => look.classes(mark.value))
+      .filter(Decorator.named)
+      .toSet
+    val before = classed.getOrElse(each.styled, Set.empty)
+    (before -- classes).foreach(each.styled.classList.remove)
+    (classes -- before).foreach(each.styled.classList.add)
+    classed.update(each.styled, classes)
     val style = each.styled.asInstanceOf[dom.HTMLElement].style
     Style.properties.foreach(style.removeProperty)
     Style
@@ -211,7 +240,6 @@ final class Decoration[A] private (
         style.setProperty(property, value, "important"),
       )
 
-  /** Lights every element of the annotations of `each`, or puts them out. */
   /** Lights the annotations of `each`, or puts them out. */
   private def light(each: Placed[A], on: Boolean): Unit =
     val annotations = each.piece.annotations.filter(isShown)
@@ -245,24 +273,29 @@ final class Decoration[A] private (
 
 private object Decoration:
 
-  /** `annotated`, put into the page in `passage`, as `look` shows it. */
+  /**
+    * `annotated`, put into the page in `passage`, as `look` shows it, each
+    * annotation whole or not at all if `whole`, telling `split` of each text
+    * node split.
+    */
   def make[A]
     (
       passage: Passage,
       annotated: AnnotatedText[A],
       look: Look[A],
       prefix: String,
+      whole: Boolean,
+      split: (dom.Text, dom.Text) => Unit,
     )
     : Decoration[A] =
-    val origins = Origins()
-    val pieces  = Plan.of(
-      annotated,
-      look,
-      passage.texts.map(_._2).toList,
-    )
-    val placed     = Edits(passage, origins, prefix).make(pieces)
+    val origins  = Origins()
+    val texts    = passage.texts.map(_._2).toList
+    val unplaced = if whole then broken(annotated, passage) else Set.empty[Int]
+    val pieces   = Plan.of(annotated, look, texts, unplaced)
+    val placed   = Edits(passage, origins, prefix, split).make(pieces)
     val decoration = new Decoration(
       annotated,
+      unplaced,
       passage,
       placed,
       origins,
@@ -273,6 +306,35 @@ private object Decoration:
     placed.foreach(decoration.refresh)
     placed.foreach(decoration.listen)
     decoration
+
+  /**
+    * The annotations of `annotated` that could not be put in `passage` whole:
+    * those with a span over what is not prose, or another decoration, or with a
+    * point with no text beside it.
+    */
+  private def broken[A]
+    (
+      annotated: AnnotatedText[A],
+      passage: Passage,
+    )
+    : Set[Int] = annotated
+    .annotations
+    .zipWithIndex
+    .collect {
+      case (annotation, index) if !annotation.spans.forall(fits(passage)) =>
+        index
+    }
+    .toSet
+
+  private def fits(passage: Passage)(span: Span): Boolean =
+    if span.isPoint then
+      passage
+        .texts
+        .exists((_, text) => text.start <= span.start && span.start <= text.end)
+    else
+      !passage
+        .atoms
+        .exists(atom => atom.start < span.end && span.start < atom.end)
 
 /**
   * The stylesheet underlining the text of every element highlighted with a
@@ -389,6 +451,7 @@ private final case class Edits
     passage: Passage,
     origins: Origins,
     prefix: String,
+    splitting: (dom.Text, dom.Text) => Unit,
   ):
 
   private val document = passage.document
@@ -407,6 +470,10 @@ private final case class Edits
     .within(wrap.span)
     .map((node, from, to) =>
       val element = span(if wrap.marks.isEmpty then s"$prefix-gap" else prefix)
+      element.setAttribute(
+        Passage.decorated,
+        wrap.span.in(passage.text),
+      )
       tag(element, wrap)
       Edit(
         wrap.span.start,
@@ -524,6 +591,7 @@ private final case class Edits
     Option.when(0 < at && at < node.length):
       val rest = node.splitText(at)
       origins.derive(rest, node)
+      splitting(node, rest)
       rest
 
 /**

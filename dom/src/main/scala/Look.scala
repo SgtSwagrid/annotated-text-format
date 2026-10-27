@@ -21,22 +21,31 @@ trait Look[-A]:
     */
   def beneath(values: List[A]): List[Style.Layer] = Nil
 
+  /**
+    * The classes given to each element highlighted for an annotation whose
+    * value is `value`, while it is shown, as an application's own styles may
+    * match: of those that may begin a class's name unescaped, as `known`.
+    */
+  def classes(value: A): List[String] = Nil
+
 object Look:
 
   /**
-    * The look that `colour`, `shown` and `beneath` give, as [[Look]] describes
-    * them.
+    * The look that `colour`, `shown`, `beneath` and `classes` give, as [[Look]]
+    * describes them.
     */
   def apply[A]
     (
       colour: A => Colour,
       shown: (A, Int) => Option[String] = (_: A, _: Int) => None,
       beneath: List[A] => List[Style.Layer] = (_: List[A]) => Nil,
+      classes: A => List[String] = (_: A) => Nil,
     )
     : Look[A] =
-    val (colours, shows, layers) = (colour, shown, beneath)
+    val (colours, shows, layers, named) = (colour, shown, beneath, classes)
     new Look[A]:
       override def colour(value: A): Colour                   = colours(value)
       override def shown(value: A, part: Int): Option[String] =
         shows(value, part)
       override def beneath(values: List[A]): List[Style.Layer] = layers(values)
+      override def classes(value: A): List[String]             = named(value)

@@ -48,9 +48,12 @@ object Colour:
 
   /**
     * Whether the browser, if it can say, takes `css` for a colour; asked of
-    * `CSS` only if there is one, as JavaScript refuses to read it if not.
+    * `CSS` only if there is one, as JavaScript refuses to read it if not. Never
+    * of a value holding a custom property, which the browser takes for anything
+    * until it computes it, and [[variable]] judges instead.
     */
   private def supported(css: String): Boolean =
+    !css.toLowerCase.contains("var(") &&
     js.typeOf(js.Dynamic.global.CSS) != "undefined" &&
     js.typeOf(js.Dynamic.global.CSS.supports) == "function" &&
     js.Dynamic.global.CSS.supports("color", css).asInstanceOf[Boolean]

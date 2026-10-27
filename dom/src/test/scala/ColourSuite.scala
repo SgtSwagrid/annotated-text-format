@@ -84,3 +84,17 @@ class ColourSuite extends FunSuite:
   test("The system's colours are colours"):
     assert(Colour.parse("Canvas").isDefined)
     assert(Colour.parse("Highlight").isDefined)
+
+  test(
+    "A browser that takes anything holding a custom property is not asked of one",
+  ):
+    val global = scala.scalajs.js.Dynamic.global.globalThis
+    global.CSS = scala
+      .scalajs
+      .js
+      .Dynamic
+      .literal(supports = (_: String, _: String) => true)
+    try
+      assertEquals(Colour.parse("var(--a), junk"), None)
+      assert(Colour.parse("color-mix(in srgb, red 50%, blue)").isDefined)
+    finally global.CSS = scala.scalajs.js.undefined

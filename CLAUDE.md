@@ -11,7 +11,7 @@ Keep it concise and actionable.
 
 ## Project overview
 
-This is a Scala library that does ...
+This is a Scala library that defines a common format for text annotated with typed values, such as corrections and translations.
 
 ## Instructions
 

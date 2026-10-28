@@ -1,9 +1,11 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Span}
+import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
 import org.scalajs.dom
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.scalajs.js
+import scala.util.control.NonFatal
 
 /**
   * Puts annotations into the page itself, in the text of a [[Passage]], as a
@@ -26,10 +28,19 @@ object Decorator:
     * begin a class's name as it is, unescaped in a selector.
     *
     * If `whole`, an annotation is put in only if all of it can be, as it cannot
-    * be over what is not prose, or another decoration, nor at a point with no
-    * text beside it; the rest are its `unplaced`. Each text node of the page
-    * that it splits, it tells `split` of, with the node split off it, as an
-    * application marking the page's nodes may copy its mark.
+    * be over what is not prose, or another decoration, nor over line breaks
+    * alone, nor at a point with no text beside it or within what another
+    * annotation shows in place of its text, nor show its text in place of what
+    * another already does; the rest are its `unplaced`.
+    *
+    * Once the page is decorated, it tells `split` of each text node of the page
+    * that it split, with the node split off it, if that is still in the page,
+    * not wrapped or replaced by an element of its own, as an application
+    * marking the page's nodes may copy its mark; a `split` that throws is
+    * passed over. As the decoration is restored, each node split off is joined
+    * back into the node it came from, and taken out of the page.
+    *
+    * Decorations of one page may be restored in any order.
     */
   def decorate[A]
     (
@@ -223,7 +234,9 @@ final class Decoration[A] private (
   private def draw(each: Placed[A], marks: List[Mark[A]]): Unit =
     val classes = marks
       .flatMap(mark => look.classes(mark.value))
-      .filter(Decorator.named)
+      .filter(name =>
+        Decorator.named(name) && name != prefix && !name.startsWith(s"$prefix-"),
+      )
       .toSet
     val before = classed.getOrElse(each.styled, Set.empty)
     (before -- classes).foreach(each.styled.classList.remove)
@@ -288,11 +301,18 @@ private object Decoration:
       split: (dom.Text, dom.Text) => Unit,
     )
     : Decoration[A] =
-    val origins  = Origins()
-    val texts    = passage.texts.map(_._2).toList
-    val unplaced = if whole then broken(annotated, passage) else Set.empty[Int]
-    val pieces   = Plan.of(annotated, look, texts, unplaced)
-    val placed   = Edits(passage, origins, prefix, split).make(pieces)
+    val origins            = Origins.shared
+    val texts              = passage.texts.map(_._2).toList
+    val (pieces, unplaced) =
+      if whole then
+        settle(
+          annotated,
+          look,
+          passage,
+          broken(annotated, passage),
+        )
+      else (Plan.of(annotated, look, texts), Set.empty[Int])
+    val placed     = Edits(passage, origins, prefix, split).make(pieces)
     val decoration = new Decoration(
       annotated,
       unplaced,
@@ -334,7 +354,85 @@ private object Decoration:
     else
       !passage
         .atoms
-        .exists(atom => atom.start < span.end && span.start < atom.end)
+        .exists((_, atom) => atom.start < span.end && span.start < atom.end) &&
+      passage
+        .texts
+        .exists((_, text) => text.start < span.end && span.start < text.end)
+
+  /**
+    * The pieces of `annotated`, leaving out the annotations `broken`, and then,
+    * one at a time, the last that they do not draw whole, until all left are;
+    * and then putting back each left out that would be drawn whole, as one may
+    * have been only for another since left out; and those left out.
+    */
+  private def settle[A]
+    (
+      annotated: AnnotatedText[A],
+      look: Look[A],
+      passage: Passage,
+      broken: Set[Int],
+    )
+    : (List[Piece[A]], Set[Int]) =
+    def plan(skipped: Set[Int]): List[Piece[A]] = Plan.of(
+      annotated,
+      look,
+      passage.texts.map(_._2).toList,
+      skipped,
+    )
+    def partial(skipped: Set[Int]): List[Int] =
+      val pieces = plan(skipped)
+      annotated
+        .annotations
+        .zipWithIndex
+        .collect {
+          case (annotation, index)
+            if !skipped(index) &&
+            !drawn(pieces, annotation, index, look, passage) => index
+        }
+    @tailrec
+    def narrow(skipped: Set[Int]): Set[Int] = partial(skipped).lastOption match
+      case Some(index) => narrow(skipped + index)
+      case None        => skipped
+    @tailrec
+    def widen(skipped: Set[Int]): Set[Int] = (skipped -- broken)
+      .toList
+      .sorted
+      .find(index => partial(skipped - index).isEmpty) match
+        case Some(index) => widen(skipped - index)
+        case None        => skipped
+    val skipped = widen(narrow(broken))
+    (plan(skipped), skipped)
+
+  /**
+    * Whether `pieces` draw `annotation`, at `index`, whole: each point put in
+    * where there is text beside it, and each span that shows other text, as
+    * `look` has it, showing it.
+    */
+  private def drawn[A]
+    (
+      pieces: List[Piece[A]],
+      annotation: Annotation[A],
+      index: Int,
+      look: Look[A],
+      passage: Passage,
+    )
+    : Boolean = annotation
+    .spans
+    .zipWithIndex
+    .forall((span, part) =>
+      if span.isPoint then
+        pieces.exists:
+          case Piece.Insert(at, mark, _, _, _) => mark.annotation == index &&
+            mark.part == part &&
+            (passage.at(at, after = true).isDefined ||
+            passage.at(at, after = false).isDefined)
+          case _ => false
+      else
+        look.shown(annotation.value, part).isEmpty || pieces.exists:
+          case Piece.Wrap(wrapped, _, Some(replacement)) =>
+            replacement.annotation == index && span.covers(wrapped)
+          case _ => false,
+    )
 
 /**
   * The stylesheet underlining the text of every element highlighted with a
@@ -456,6 +554,9 @@ private final case class Edits
 
   private val document = passage.document
 
+  /** The text nodes split, each with the node split off it, in order. */
+  private val splits = mutable.ListBuffer.empty[(dom.Text, dom.Text)]
+
   /** Puts `pieces` into the page, giving each as placed there. */
   def make[A](pieces: List[Piece[A]]): Vector[Placed[A]] =
     val (wraps, inserts) = pieces.partitionMap:
@@ -463,6 +564,12 @@ private final case class Edits
       case insert: Piece.Insert[A] => Right(insert)
     val edits = wraps.flatMap(wrapping) ++ inserting(inserts)
     edits.sortBy(edit => (-edit.offset, edit.rank)).foreach(_.make())
+    splits
+      .filter((_, rest) => rest.parentNode != null)
+      .foreach((node, rest) =>
+        try splitting(node, rest)
+        catch case NonFatal(_) => (),
+      )
     edits.flatMap(_.placed).toVector
 
   /** The edit wrapping the text of `wrap`, if it lies within one text node. */
@@ -591,7 +698,7 @@ private final case class Edits
     Option.when(0 < at && at < node.length):
       val rest = node.splitText(at)
       origins.derive(rest, node)
-      splitting(node, rest)
+      splits += node -> rest
       rest
 
 /**
@@ -612,11 +719,16 @@ private final case class Edit[A]
   */
 private final class Origins:
 
-  /** Each node's origin, by the node itself, as JavaScript objects are equal. */
-  private var origins = Map.empty[dom.Node, dom.Text]
+  /**
+    * Each node's origin, by the node itself, held only while the node is, as
+    * those of a page's decorations are, which may be restored in any order.
+    */
+  private val origins = js.Dynamic.newInstance(js.Dynamic.global.WeakMap)()
 
   /** The text node of the page that `node` came from. */
-  def of(node: dom.Node): Option[dom.Text] = origins.get(node)
+  def of(node: dom.Node): Option[dom.Text] =
+    val origin = origins.get(node.asInstanceOf[js.Any])
+    if js.isUndefined(origin) then None else Some(origin.asInstanceOf[dom.Text])
 
   /**
     * Marks `node` as from the same text node of the page as `text`, and `text`
@@ -624,9 +736,19 @@ private final class Origins:
     */
   def derive(node: dom.Node, text: dom.Text): Unit =
     val origin = of(text).getOrElse(text)
-    origins = origins + (text -> origin) + (node -> origin)
+    origins.set(
+      text.asInstanceOf[js.Any],
+      origin.asInstanceOf[js.Any],
+    )
+    origins.set(
+      node.asInstanceOf[js.Any],
+      origin.asInstanceOf[js.Any],
+    )
 
 private object Origins:
+
+  /** The origins of the nodes of every decoration, which all share them. */
+  lazy val shared: Origins = Origins()
 
   /**
     * Joins each run of text nodes beneath `root` that came from one text node

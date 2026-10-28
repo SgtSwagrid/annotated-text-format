@@ -703,13 +703,7 @@ class DecorationSuite extends FunSuite:
       )
       .toOption
       .get
-    assertEquals(
-      splits,
-      List(
-        "She always" -> " is late.",
-        "She "       -> "always",
-      ),
-    )
+    assertEquals(splits, List("She " -> " is late."))
 
   test("The classes that a look gives are on its elements while shown"):
     val paragraph = Jsdom.element("<p>She always is late.</p>")
@@ -729,3 +723,172 @@ class DecorationSuite extends FunSuite:
     assert(!element.classList.contains("known"))
     decoration.show(0)
     assert(element.classList.contains("known"))
+
+  test("Decorations of one page may be restored in any order"):
+    val paragraph = Jsdom.element("<p>She always is late.</p>")
+    val page      = paragraph.firstChild
+    val first     = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    val second = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(14, 18)), "y"),
+    )
+    first.restore()
+    second.restore()
+    assertEquals(paragraph.childNodes.length, 1)
+    assert(paragraph.firstChild eq page)
+    assertEquals(
+      page.textContent,
+      "She always is late.",
+    )
+
+  test("A passage read before the page changed finds nothing there"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val stale      = Passage(paragraph)
+    val decoration = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    assertEquals(stale.rangeOf(Span(14, 18)), None)
+    val fresh = Passage(paragraph)
+    assertEquals(
+      fresh.rangeOf(Span(14, 18)).map(_.toString()),
+      Some("late"),
+    )
+    assertEquals(
+      fresh.offsetOf(
+        decoration.elements(0).head.firstChild,
+        2,
+      ),
+      Some(6),
+    )
+
+  test("Placed whole, an annotation drawn only in part is left out"):
+    val page = Jsdom.element("<div><p>Ich stehe auf.</p><p>Er geht.</p></div>")
+    val passage    = Passage(page)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(
+            Annotation(List(Span(4, 9)), List("stand")),
+            Annotation(List(Span(6, 9)), List("x")),
+            Annotation(List(Span.point(6)), List("y")),
+            Annotation(List(Span(14, 15)), List("z")),
+          ))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(decoration.unplaced, Set(1, 2, 3))
+    assertEquals(texts(page), List("stand"))
+
+  test("A split hook that throws is passed over, the page decorated whole"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val passage    = Passage(paragraph)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage.annotate(List(Annotation(List(Span(4, 10)), "x"))).toOption.get,
+        kept,
+        split = (_, _) => throw new RuntimeException("refused"),
+      )
+      .toOption
+      .get
+    assertEquals(texts(paragraph), List("always"))
+    decoration.restore()
+    assertEquals(
+      paragraph.textContent,
+      "She always is late.",
+    )
+
+  test("A look cannot give the decoration's own classes"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val decoration = decorate(
+      paragraph,
+      Look[String](
+        _ => Colour("teal"),
+        classes = _ => List("atf-lit", "atf"),
+      ),
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    val element = decoration.elements(0).head
+    assert(!element.classList.contains("atf-lit"))
+    decoration.hide(0)
+    decoration.show(0)
+    assert(element.classList.contains("atf"))
+
+  test("A passage read before its nodes changed gives no range in them"):
+    val paragraph = Jsdom.element("<p>The apple is red.</p>")
+    val stale     = Passage(paragraph)
+    decorate(
+      paragraph,
+      translated,
+      Annotation(List(Span(0, 9)), List("Der Apfel")),
+    )
+    assertEquals(stale.rangeOf(Span(1, 3)), None)
+    assertEquals(stale.rangeOf(Span.point(0)), None)
+
+  test("A replacement beginning at a break between blocks is drawn whole"):
+    val page       = Jsdom.element("<div><p>one</p><p>two</p></div>")
+    val passage    = Passage(page)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(Annotation(List(Span(3, 7)), List("zwei"))))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(decoration.unplaced, Set.empty[Int])
+    assertEquals(texts(page), List("zwei"))
+
+  test("Placed whole, one left out only for another left out is put back"):
+    val paragraph = Jsdom.element("<p>Ich stehe auf.<input><input></p>")
+    val document  = paragraph.ownerDocument
+    paragraph.insertBefore(
+      document.createTextNode(""),
+      paragraph.lastChild,
+    )
+    val passage    = Passage(paragraph)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(
+            Annotation(
+              List(Span(4, 9), Span.point(15)),
+              List("stand", "x"),
+            ),
+            Annotation(List(Span(6, 12)), List("geht")),
+          ))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(decoration.unplaced, Set(0))
+    assertEquals(texts(paragraph), List("geht"))
+
+  test(
+    "An offset at an element's child that is not prose is where that child is",
+  ):
+    val paragraph = Jsdom.element("<p>Ich <input> auf</p>")
+    assertEquals(
+      Passage(paragraph).offsetOf(paragraph, 1),
+      Some(4),
+    )

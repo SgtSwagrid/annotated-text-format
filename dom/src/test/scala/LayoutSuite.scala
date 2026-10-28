@@ -11,7 +11,9 @@ class LayoutSuite extends FunSuite:
       annotations: Annotation[String]*,
     ) = AnnotatedText.of(text, annotations.toList).toOption.get
 
-  test("Segments make up the whole text, cut at every end of a span"):
+  test(
+    "Segments make up the whole text, cut at every end of a span, each holding the marks of the annotations over it",
+  ):
     val segments = Layout.of(annotated(
       "She always is late.",
       Annotation(
@@ -33,20 +35,18 @@ class LayoutSuite extends FunSuite:
         Span(14, 19)   -> Nil,
       ),
     )
-
-  test("A stretch under overlapping annotations holds the marks of both"):
-    val segments = Layout.of(annotated(
+    val overlapping = Layout.of(annotated(
       "a b c",
       Annotation(Span(0, 3), "x"),
       Annotation(Span(2, 5), "y"),
     ))
     assertEquals(
-      segments.map(_.marks.map(_.annotation)),
+      overlapping.map(_.marks.map(_.annotation)),
       List(List(0), List(0, 1), List(1)),
     )
 
   test(
-    "An enclosing annotation takes the lane against the text, and one nested in it the next",
+    "An enclosing annotation takes the lane against the text, one nested in it the next, and one split keeps one lane, which others between its spans may share",
   ):
     assertEquals(
       Layout.lanes(List(
@@ -55,10 +55,6 @@ class LayoutSuite extends FunSuite:
       )),
       Vector(1, 0),
     )
-
-  test(
-    "An annotation keeps one lane for all its spans, which others between them may share",
-  ):
     val split   = Annotation(List(Span(0, 2), Span(6, 8)), "split")
     val between = Annotation(Span(3, 5), "between")
     val across  = Annotation(Span(1, 7), "across")

@@ -6,25 +6,25 @@ import io.circe.parser.decode
 import io.circe.syntax.*
 import munit.FunSuite
 
-class QuotedSuite extends FunSuite:
+class QuotedAnnotationSuite extends FunSuite:
 
   test("A quote is split into parts where an ellipsis stands between spaces"):
     assertEquals(
-      Quoted.parts("stehe … auf"),
+      QuotedAnnotation.parts("stehe … auf"),
       List("stehe", "auf"),
     )
     assertEquals(
-      Quoted.parts("stehe ... auf"),
+      QuotedAnnotation.parts("stehe ... auf"),
       List("stehe", "auf"),
     )
     assertEquals(
-      Quoted.parts("Wait... what"),
+      QuotedAnnotation.parts("Wait... what"),
       List("Wait... what"),
     )
-    assertEquals(Quoted.parts("  "), Nil)
+    assertEquals(QuotedAnnotation.parts("  "), Nil)
 
   test("A quoted annotation is written as its quote and its value"):
-    val quoted = Quoted("stehe … auf", "get up")
+    val quoted = QuotedAnnotation("stehe … auf", "get up")
     assertEquals(
       quoted.asJson,
       Json.obj(
@@ -33,7 +33,7 @@ class QuotedSuite extends FunSuite:
       ),
     )
     assertEquals(
-      decode[Quoted[String]](quoted.asJson.noSpaces),
+      decode[QuotedAnnotation[String]](quoted.asJson.noSpaces),
       Right(quoted),
     )
 
@@ -43,7 +43,7 @@ class QuotedSuite extends FunSuite:
       "$defs" ->
         Json.obj("Gloss" -> Json.obj("type" -> Json.fromString("string"))),
     )
-    val schema = Quoted.listSchema(value).hcursor
+    val schema = QuotedAnnotation.listSchema(value).hcursor
     assertEquals(
       schema.downField("$schema").as[String],
       Right(JsonSchema.dialect),
@@ -58,6 +58,21 @@ class QuotedSuite extends FunSuite:
     )
     assert(schema.downField("$defs").downField("Gloss").succeeded)
 
-  test("The instructions show how parts and points are quoted"):
-    assert(Quoted.instructions.contains("stehe … auf"))
-    assert(Quoted.instructions.contains("is ‸late"))
+  test("The schema tells how parts, points and marked passages are quoted"):
+    val quote = QuotedAnnotation
+      .schema(Json.obj())
+      .hcursor
+      .downField("properties")
+      .downField("quote")
+      .get[String]("description")
+      .toOption
+      .get
+    List(
+      QuotedAnnotation.separator.trim,
+      QuotedAnnotation.caret.toString,
+      QuotedAnnotation.open.toString,
+      QuotedAnnotation.close.toString,
+      "stehe … auf",
+      "is ‸late",
+    ).foreach(mark => assert(quote.contains(mark), mark))
+    assert(!quote.contains("`"))

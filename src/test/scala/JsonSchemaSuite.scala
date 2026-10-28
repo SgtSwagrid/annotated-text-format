@@ -95,3 +95,23 @@ class JsonSchemaSuite extends FunSuite:
       ),
       None,
     )
+
+  test("Schemas are described by the Scaladoc of what they describe"):
+    val span = Span.schema.hcursor
+    assert(
+      span.get[String]("description").exists(_.startsWith("A part of a text")),
+    )
+    assert(
+      span
+        .downField("properties")
+        .downField("start")
+        .get[String]("description")
+        .exists(_.contains("UTF-16")),
+    )
+    val text = AnnotatedText.schema(Json.obj()).hcursor
+    assert(
+      text
+        .get[String]("description")
+        .exists(_.startsWith("A text with annotations")),
+    )
+    assert(text.get[String]("description").forall(!_.contains("`")))

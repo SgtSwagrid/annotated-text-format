@@ -9,6 +9,20 @@ import io.circe.{Json, JsonObject}
   */
 object JsonSchema:
 
+  /**
+    * `schema`, described by `description`, if there is one, as read from the
+    * Scaladoc of what it describes, which is so its one description, read by
+    * people and models alike.
+    */
+  private[annotatedtextformat] def described
+    (
+      schema: Json,
+      description: Option[String],
+    )
+    : Json = description.fold(schema)(text =>
+    schema.deepMerge(Json.obj("description" -> Json.fromString(text))),
+  )
+
   /** The dialect of JSON Schema in which the schemas are written. */
   val dialect: String = "https://json-schema.org/draft/2020-12/schema"
 

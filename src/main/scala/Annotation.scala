@@ -1,12 +1,17 @@
 package com.alecdorrington.annotatedtextformat
 
+import com.alecdorrington.cadmus.Scaladoc
 import io.circe.{Decoder, Encoder, Json}
 
 /**
-  * A `value` attached to the `spans` of a text: one, as a word, or several, as
-  * the parts of a separable verb, or a span of words and the point to which
-  * they move. In an [[AnnotatedText]], it has at least one span, its spans are
-  * in order, and none overlaps another.
+  * A value attached to spans of a text: one, as a word, or several, as the
+  * parts of a separable verb, or a span of words and the point to which they
+  * move. In an annotated text, it has at least one span, its spans are in
+  * order, and none overlaps another.
+  *
+  * @param spans
+  *   The spans to which the value is attached, in order, none overlapping
+  *   another.
   *
   * @tparam A
   *   The type of the value, specific to the application, such as a correction
@@ -49,25 +54,34 @@ object Annotation:
     * `value`, within a whole schema, to which the definitions of `value`
     * belong.
     */
-  def schema(value: Json): Json = Json.obj(
-    "type"       -> Json.fromString("object"),
-    "properties" -> Json.obj(
-      "spans" -> Json.obj(
-        "type"        -> Json.fromString("array"),
-        "description" -> Json.fromString(
-          "The spans to which the value is attached, in order, none overlapping another.",
+  def schema(value: Json): Json = JsonSchema.described(
+    Json.obj(
+      "type"       -> Json.fromString("object"),
+      "properties" -> Json.obj(
+        "spans" -> JsonSchema.described(
+          Json.obj(
+            "type"     -> Json.fromString("array"),
+            "minItems" -> Json.fromInt(1),
+            "items"    -> Span.schema,
+          ),
+          doc.flatMap(_.params.get("spans")),
         ),
-        "minItems" -> Json.fromInt(1),
-        "items"    -> Span.schema,
+        "value" -> value,
       ),
-      "value" -> value,
+      "required" -> Json.arr(
+        Json.fromString("spans"),
+        Json.fromString("value"),
+      ),
+      "additionalProperties" -> Json.False,
     ),
-    "required" -> Json.arr(
-      Json.fromString("spans"),
-      Json.fromString("value"),
-    ),
-    "additionalProperties" -> Json.False,
+    doc.flatMap(_.description),
   )
+
+  /**
+    * Its Scaladoc, which describes its schema; but for its value, which the
+    * value's own schema describes.
+    */
+  private def doc = Scaladoc.of[Annotation[Any]].map(_.plain)
 
   /** An annotation as `{"spans": [...], "value": ...}`. */
   given [A : Encoder] => Encoder[Annotation[A]] =

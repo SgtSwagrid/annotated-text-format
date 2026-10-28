@@ -1,12 +1,20 @@
 package com.alecdorrington.annotatedtextformat
 
+import com.alecdorrington.cadmus.Scaladoc
 import io.circe.{Decoder, Encoder, Json}
 
 /**
-  * A part of a text, from `start` up to but excluding `end`, counted in UTF-16
-  * code units, as both the JVM's and JavaScript's strings count them, and the
-  * DOM's ranges too. Where they are equal, it is a point between two
-  * characters, as where text is to be inserted.
+  * A part of a text, from its start up to but excluding its end, counted in
+  * UTF-16 code units, as JavaScript's strings count them. Where they are equal,
+  * it is a point between two characters, as where text is to be inserted.
+  *
+  * @param start
+  *   Where it begins: how many UTF-16 code units of the text come before it.
+  * @param end
+  *   Where it ends: how many UTF-16 code units of the text come before its end.
+  *
+  * @note
+  *   The JVM's strings and the DOM's ranges count alike.
   */
 final case class Span(start: Int, end: Int):
 
@@ -54,25 +62,30 @@ object Span:
 
   given Decoder[Span] = Decoder.forProduct2("start", "end")(Span.apply)
 
-  /** The JSON Schema of a span. */
-  val schema: Json = Json.obj(
-    "type"        -> Json.fromString("object"),
-    "description" -> Json.fromString(
-      "A part of the text, from start up to but excluding end, counted in UTF-16 code units; a point between two characters where they are equal.",
+  /** Its Scaladoc, which describes its schema. */
+  private val doc = Scaladoc.of[Span].map(_.plain)
+
+  /** The JSON Schema of a span, described by its Scaladoc. */
+  val schema: Json = JsonSchema.described(
+    Json.obj(
+      "type"       -> Json.fromString("object"),
+      "properties" -> Json.obj(
+        "start" -> offset(doc.flatMap(_.params.get("start"))),
+        "end"   -> offset(doc.flatMap(_.params.get("end"))),
+      ),
+      "required" -> Json.arr(
+        Json.fromString("start"),
+        Json.fromString("end"),
+      ),
+      "additionalProperties" -> Json.False,
     ),
-    "properties" -> Json.obj(
-      "start" -> offset("Where the span begins."),
-      "end"   -> offset("Where the span ends."),
-    ),
-    "required" -> Json.arr(
-      Json.fromString("start"),
-      Json.fromString("end"),
-    ),
-    "additionalProperties" -> Json.False,
+    doc.flatMap(_.description),
   )
 
-  private def offset(description: String): Json = Json.obj(
-    "type"        -> Json.fromString("integer"),
-    "minimum"     -> Json.fromInt(0),
-    "description" -> Json.fromString(description),
+  private def offset(description: Option[String]): Json = JsonSchema.described(
+    Json.obj(
+      "type"    -> Json.fromString("integer"),
+      "minimum" -> Json.fromInt(0),
+    ),
+    description,
   )

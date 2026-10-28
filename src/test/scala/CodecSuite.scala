@@ -45,11 +45,9 @@ class CodecSuite extends FunSuite:
       |}""".stripMargin).toOption.get
 
   test(
-    "An annotated text is written as its text and its annotations' spans and values",
+    "An annotated text is written as its text and its annotations' spans and values, and read back as it was",
   ):
     assertEquals(annotated.asJson, json)
-
-  test("An annotated text is read back as it was written"):
     assertEquals(
       json.as[AnnotatedText[Remark]],
       Right(annotated),

@@ -21,7 +21,9 @@ class TooltipSuite extends FunSuite:
   private def text(document: dom.Document, content: String): dom.Node = document
     .createTextNode(content)
 
-  test("A tooltip shows its content in the top of the page, and closes"):
+  test(
+    "A tooltip shows its content in the top of the page, replaced while it is open, but not by a late answer once it closes or moves on",
+  ):
     val paragraph = Jsdom.element("<p>Ich stehe auf.</p>")
     val document  = paragraph.ownerDocument
     val tooltip   = Tooltip(document, ".card { padding: 8px }")
@@ -39,11 +41,8 @@ class TooltipSuite extends FunSuite:
     assert(tooltip.host.hasAttribute("hidden"))
     tooltip.remove()
     assert(tooltip.host.parentNode == null)
-
-  test("A tooltip's content may be replaced while it is open"):
-    val document = Jsdom.element("<p>x</p>").ownerDocument
-    val tooltip  = Tooltip(document)
-    val showing  = tooltip.show(
+    val replaced = Tooltip(document)
+    val showing  = replaced.show(
       text(document, "get up"),
       Box(10, 10, 40, 20),
     )
@@ -51,34 +50,31 @@ class TooltipSuite extends FunSuite:
       document,
       "aufstehen: to get up; to stand up",
     )))
-    assert(tooltip.isOpen)
+    assert(replaced.isOpen)
     assertEquals(
-      shown(tooltip),
+      shown(replaced),
       "aufstehen: to get up; to stand up",
     )
-
-  test("A late answer is dropped once the tooltip closes or moves on"):
-    val document = Jsdom.element("<p>x</p>").ownerDocument
-    val tooltip  = Tooltip(document)
-    val first    = tooltip.show(
+    val late  = Tooltip(document)
+    val first = late.show(
       text(document, "get up"),
       Box(10, 10, 40, 20),
     )
-    val second = tooltip.show(
+    val second = late.show(
       text(document, "early"),
       Box(60, 10, 40, 20),
     )
     assert(!first.isCurrent)
     assert(!first.update(text(document, "aufstehen")))
-    assertEquals(shown(tooltip), "early")
-    tooltip.hide()
+    assertEquals(shown(late), "early")
+    late.hide()
     assert(!second.update(text(document, "früh")))
-    tooltip.show(
+    late.show(
       text(document, "early"),
       Box(60, 10, 40, 20),
     )
     assert(!second.update(text(document, "früh")))
-    assertEquals(shown(tooltip), "early")
+    assertEquals(shown(late), "early")
 
   test(
     "Hovering over an annotation shows what it is, until the pointer moves away",
@@ -133,7 +129,9 @@ class TooltipSuite extends FunSuite:
     )
     card
 
-  test("The pointer's presses and clicks in a tooltip never reach the page"):
+  test(
+    "The pointer's presses and clicks, and keys typed, in a tooltip never reach the page, unless it is not interactive",
+  ):
     val document = Jsdom.element("<p>x</p>").ownerDocument
     val tooltip  = Tooltip(document)
     val content  = document.createElement("div")
@@ -154,18 +152,31 @@ class TooltipSuite extends FunSuite:
       "click",
     )
     assertEquals(heard, List("click"))
+    var keys = 0
+    document.addEventListener("keydown", (_: dom.Event) => keys += 1)
+    val window = document.asInstanceOf[js.Dynamic].defaultView
+    content
+      .lastChild
+      .dispatchEvent(
+        js.Dynamic
+          .newInstance(window.KeyboardEvent)(
+            "keydown",
+            js.Dynamic.literal(bubbles = true, composed = true, key = "k"),
+          )
+          .asInstanceOf[dom.Event],
+      )
+    assertEquals(keys, 0)
+    val passive = Tooltip(document, interactive = false)
+    val target  = document.createElement("button")
+    passive.show(target, Box(10, 10, 40, 20))
+    var clicks = 0
+    document.addEventListener("click", (_: dom.Event) => clicks += 1)
+    Jsdom.click(target, "click")
+    assertEquals(clicks, 1)
 
-  test("A tooltip that is not interactive keeps nothing from the page"):
-    val document = Jsdom.element("<p>x</p>").ownerDocument
-    val tooltip  = Tooltip(document, interactive = false)
-    val content  = document.createElement("button")
-    tooltip.show(content, Box(10, 10, 40, 20))
-    var heard = 0
-    document.addEventListener("click", (_: dom.Event) => heard += 1)
-    Jsdom.click(content, "click")
-    assertEquals(heard, 1)
-
-  test("A tooltip is styled within by the sheets given to it"):
+  test(
+    "A tooltip is styled within by the sheets given to it, passing over one whose rules may not be read",
+  ):
     val document = Jsdom.element("<p>x</p>").ownerDocument
     val window   = document.asInstanceOf[js.Dynamic].defaultView
     val sheet    = js.Dynamic.newInstance(window.CSSStyleSheet)()
@@ -185,8 +196,32 @@ class TooltipSuite extends FunSuite:
       Box(10, 10, 40, 20),
     )
     assertEquals(shown(tooltip), "get up")
+    val unreadable = js.Dynamic.literal()
+    js.Object
+      .defineProperty(
+        unreadable.asInstanceOf[js.Object],
+        "cssRules",
+        js.Dynamic
+          .literal(get =
+            (() => throw js.JavaScriptException("SecurityError")): js.Function0[
+              Any,
+            ],
+          )
+          .asInstanceOf[js.PropertyDescriptor],
+      )
+    val guarded = Tooltip(
+      document,
+      sheets = List(unreadable.asInstanceOf[dom.CSSStyleSheet]),
+    )
+    guarded.show(
+      text(document, "get up"),
+      Box(10, 10, 40, 20),
+    )
+    assertEquals(shown(guarded), "get up")
 
-  test("A tap on an annotation shows what it is, and one elsewhere closes it"):
+  test(
+    "A tap on an annotation shows what it is, a second tap or one elsewhere closes it, and a tap's click goes no further",
+  ):
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
     val decoration = decorated(paragraph, List(Span(4, 9), Span(15, 18)))
@@ -205,9 +240,26 @@ class TooltipSuite extends FunSuite:
     Jsdom.tap(paragraph.firstChild, 500, 500)
     assert(!tooltip.isOpen)
     hovering.stop()
+    val linked =
+      Jsdom.element("<p><a href=\"#elsewhere\">Ich stehe früh auf.</a></p>")
+    val link    = decorated(linked, List(Span(4, 9)))
+    val tapped  = Tooltip(linked.ownerDocument)
+    val tapping = Hovering[String](
+      tapped,
+      (_, _) => Some(text(linked.ownerDocument, "get up")),
+    )
+    tapping.add(link)
+    val word = link.elements(0).head.firstChild
+    Jsdom.tap(word, 0, 0)
+    assert(tapped.isOpen)
+    assert(!Jsdom.click(word, "click"))
+    assert(Jsdom.click(word, "click"))
+    Jsdom.tap(word, 0, 0)
+    assert(!tapped.isOpen)
+    tapping.stop()
 
   test(
-    "The keyboard reaches each annotation, and Tab, Shift and Escape move through its tooltip",
+    "The keyboard reaches each annotation, and Tab, Shift and Escape move through its tooltip, Tab from its last part giving the focus back",
   ):
     val paragraph =
       Jsdom.element("<p>Ich stehe früh auf. <button>Weiter</button></p>")
@@ -247,21 +299,6 @@ class TooltipSuite extends FunSuite:
     assert(tooltip.isOpen)
     button.focus()
     assert(!tooltip.isOpen)
-    hovering.stop()
-    assert(parts.forall(!_.hasAttribute("tabindex")))
-
-  test("Tab from a tooltip's last part gives the focus back, and closes it"):
-    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
-    val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9), Span(15, 18)))
-    val tooltip    = Tooltip(document)
-    val hovering   = Hovering[String](
-      tooltip,
-      (_, _) => Some(card(document)),
-      focusable = true,
-    )
-    hovering.add(decoration)
-    val first = decoration.elements(0).head.asInstanceOf[dom.HTMLElement]
     first.focus()
     Jsdom.press(document, "Tab")
     tooltip.focusables.last.focus()
@@ -269,8 +306,11 @@ class TooltipSuite extends FunSuite:
     assert(document.asInstanceOf[dom.HTMLDocument].activeElement eq first)
     assert(!tooltip.isOpen)
     hovering.stop()
+    assert(parts.forall(!_.hasAttribute("tabindex")))
 
-  test("One hovering covers decorations as they are added and removed"):
+  test(
+    "One hovering covers decorations as they are added and removed, letting go of those restored, but not of those yet to be shown",
+  ):
     val page = Jsdom.element(
       "<div><p>Ich stehe früh auf.</p><p>Er steht spät auf.</p></div>",
     )
@@ -338,8 +378,41 @@ class TooltipSuite extends FunSuite:
     assert(tooltip.isOpen)
     hovering.stop()
     assert(!tooltip.isOpen)
+    val other = Jsdom.element(
+      "<div><p>Ich stehe früh auf.</p><p>Er steht spät auf.</p></div>",
+    )
+    val apart = other.ownerDocument.createElement("p")
+    apart.textContent = "Sie steht auf."
+    val restored = decorated(
+      other.firstElementChild,
+      List(Span(4, 9)),
+    )
+    val detached = decorated(apart, List(Span(4, 9)))
+    val held     = Tooltip(other.ownerDocument)
+    val covering = Hovering[String](
+      held,
+      (_, _) => Some(text(other.ownerDocument, "get up")),
+      focusable = true,
+    )
+    covering.add(restored)
+    covering.add(detached)
+    restored.restore()
+    covering.add(decorated(
+      other.lastElementChild,
+      List(Span(3, 8)),
+    ))
+    other.appendChild(apart)
+    Jsdom.move(
+      detached.elements(0).head.firstChild,
+      0,
+      0,
+    )
+    assert(held.isOpen)
+    covering.stop()
 
-  test("A tooltip says what it is, and describes what it is open for"):
+  test(
+    "A tooltip says what it is, and describes what it is open for beside what else does, focus on its word keeping it showing",
+  ):
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
     val decoration = decorated(paragraph, List(Span(4, 9)))
@@ -379,69 +452,35 @@ class TooltipSuite extends FunSuite:
     Jsdom.press(document, "Escape")
     assert(!element.hasAttribute("aria-describedby"))
     hovering.stop()
-
-  test("A second tap closes the tooltip, and a tap's click goes no further"):
-    val paragraph =
-      Jsdom.element("<p><a href=\"#elsewhere\">Ich stehe früh auf.</a></p>")
-    val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9)))
-    val tooltip    = Tooltip(document)
-    val hovering   = Hovering[String](
-      tooltip,
-      (_, _) => Some(text(document, "get up")),
+    val described  = Jsdom.element("<p>Ich stehe früh auf.</p>")
+    val annotation = decorated(described, List(Span(4, 9)))
+    val focused    = Tooltip(described.ownerDocument)
+    var showings   = List.empty[Tooltip.Showing]
+    val focusing   = Hovering[String](
+      focused,
+      (_, showing) =>
+        showings :+= showing
+        Some(text(described.ownerDocument, "get up"))
+      ,
+      focusable = true,
     )
-    hovering.add(decoration)
-    val word = decoration.elements(0).head.firstChild
-    Jsdom.tap(word, 0, 0)
-    assert(tooltip.isOpen)
-    assert(!Jsdom.click(word, "click"))
-    assert(Jsdom.click(word, "click"))
-    Jsdom.tap(word, 0, 0)
-    assert(!tooltip.isOpen)
-    hovering.stop()
-
-  test("Keys typed in a tooltip never reach the page"):
-    val document = Jsdom.element("<p>x</p>").ownerDocument
-    val tooltip  = Tooltip(document)
-    val field    = document.createElement("input")
-    tooltip.show(field, Box(10, 10, 40, 20))
-    var heard = 0
-    document.addEventListener("keydown", (_: dom.Event) => heard += 1)
-    val window = document.asInstanceOf[js.Dynamic].defaultView
-    field.dispatchEvent(
-      js.Dynamic
-        .newInstance(window.KeyboardEvent)(
-          "keydown",
-          js.Dynamic.literal(bubbles = true, composed = true, key = "k"),
-        )
-        .asInstanceOf[dom.Event],
+    focusing.add(annotation)
+    val word = annotation.elements(0).head
+    word.setAttribute("aria-describedby", "note-3")
+    Jsdom.move(word.firstChild, 0, 0)
+    assertEquals(
+      word.getAttribute("aria-describedby"),
+      s"note-3 ${ focused.id }",
     )
-    assertEquals(heard, 0)
-
-  test("A sheet whose rules may not be read is passed over"):
-    val document = Jsdom.element("<p>x</p>").ownerDocument
-    val sheet    = js.Dynamic.literal()
-    js.Object
-      .defineProperty(
-        sheet.asInstanceOf[js.Object],
-        "cssRules",
-        js.Dynamic
-          .literal(get =
-            (() => throw js.JavaScriptException("SecurityError")): js.Function0[
-              Any,
-            ],
-          )
-          .asInstanceOf[js.PropertyDescriptor],
-      )
-    val tooltip = Tooltip(
-      document,
-      sheets = List(sheet.asInstanceOf[dom.CSSStyleSheet]),
+    word.asInstanceOf[dom.HTMLElement].focus()
+    assertEquals(showings.size, 1)
+    assert(showings.head.update(text(described.ownerDocument, "aufstehen")))
+    Jsdom.press(described.ownerDocument, "Escape")
+    assertEquals(
+      word.getAttribute("aria-describedby"),
+      "note-3",
     )
-    tooltip.show(
-      text(document, "get up"),
-      Box(10, 10, 40, 20),
-    )
-    assertEquals(shown(tooltip), "get up")
+    focusing.stop()
 
   test("Annotations within a shadow root of the page show a tooltip too"):
     val page     = Jsdom.element("<div></div>")
@@ -474,69 +513,4 @@ class TooltipSuite extends FunSuite:
     )
     Jsdom.press(document, "Escape")
     assert(!tooltip.isOpen)
-    hovering.stop()
-
-  test("Focus on a word whose tooltip is open keeps that showing"):
-    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
-    val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9)))
-    val tooltip    = Tooltip(document)
-    var showings   = List.empty[Tooltip.Showing]
-    val hovering   = Hovering[String](
-      tooltip,
-      (_, showing) =>
-        showings :+= showing
-        Some(text(document, "get up"))
-      ,
-      focusable = true,
-    )
-    hovering.add(decoration)
-    val element = decoration.elements(0).head
-    element.setAttribute("aria-describedby", "note-3")
-    Jsdom.move(element.firstChild, 0, 0)
-    assertEquals(
-      element.getAttribute("aria-describedby"),
-      s"note-3 ${ tooltip.id }",
-    )
-    element.asInstanceOf[dom.HTMLElement].focus()
-    assertEquals(showings.size, 1)
-    assert(showings.head.update(text(document, "aufstehen")))
-    Jsdom.press(document, "Escape")
-    assertEquals(
-      element.getAttribute("aria-describedby"),
-      "note-3",
-    )
-    hovering.stop()
-
-  test(
-    "A hovering lets go of decorations restored, but not of those yet to be shown",
-  ):
-    val page = Jsdom.element(
-      "<div><p>Ich stehe früh auf.</p><p>Er steht spät auf.</p></div>",
-    )
-    val document = page.ownerDocument
-    val apart    = document.createElement("p")
-    apart.textContent = "Sie steht auf."
-    val first = decorated(
-      page.firstElementChild,
-      List(Span(4, 9)),
-    )
-    val detached = decorated(apart, List(Span(4, 9)))
-    val tooltip  = Tooltip(document)
-    val hovering = Hovering[String](
-      tooltip,
-      (_, _) => Some(text(document, "get up")),
-      focusable = true,
-    )
-    hovering.add(first)
-    hovering.add(detached)
-    first.restore()
-    hovering.add(decorated(page.lastElementChild, List(Span(3, 8))))
-    page.appendChild(apart)
-    Jsdom.move(
-      detached.elements(0).head.firstChild,
-      0,
-      0,
-    )
-    assert(tooltip.isOpen)
     hovering.stop()

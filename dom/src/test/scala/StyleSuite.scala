@@ -7,10 +7,10 @@ class StyleSuite extends FunSuite:
   private val teal = Colour("#14b8a6")
   private val grey = Colour("#94a3b8")
 
-  test("Text under no highlights is not drawn"):
+  test(
+    "A highlight is an underline in its lane, over a tint, and text under none is not drawn",
+  ):
     assertEquals(Style.of(Nil), Nil)
-
-  test("A highlight is an underline in its lane, over a tint"):
     assertEquals(
       Style.of(List(teal -> 1)).toMap,
       Map(

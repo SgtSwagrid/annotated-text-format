@@ -5,7 +5,9 @@ import munit.FunSuite
 
 class SpacingSuite extends FunSuite:
 
-  test("An emptied word takes the space after it, or else the one before it"):
+  test(
+    "An emptied word takes the space after it, or else the one before it, but never a line break",
+  ):
     assertEquals(
       Spacing.beside("I really like it.", Span(2, 8)),
       Some(Span(8, 9)),
@@ -14,11 +16,11 @@ class SpacingSuite extends FunSuite:
       Spacing.beside("I like.", Span(2, 6)),
       Some(Span(1, 2)),
     )
-
-  test("An emptied word never takes a line break"):
     assertEquals(Spacing.beside("a\nb", Span(2, 3)), None)
 
-  test("A word put in is spaced off the words beside it"):
+  test(
+    "A word put in is spaced off the words beside it, but not in a script that does not space them, nor beside a full-width stop or a character beyond the basic plane",
+  ):
     assertEquals(
       Spacing.around("early late", 5),
       (true, false),
@@ -31,13 +33,7 @@ class SpacingSuite extends FunSuite:
       Spacing.around("(note)", 1),
       (false, true),
     )
-
-  test("A word put in a script that does not space its words is not spaced"):
     assertEquals(Spacing.around("我的猫", 1), (false, false))
-
-  test(
-    "A word put in beside a full-width stop, or a character beyond the basic plane, is not spaced",
-  ):
     assertEquals(
       Spacing.around("我的猫。", 3),
       (false, false),

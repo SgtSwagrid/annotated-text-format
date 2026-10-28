@@ -1,12 +1,20 @@
 package com.alecdorrington.annotatedtextformat
 
+import com.alecdorrington.cadmus.Scaladoc
 import io.circe.{Decoder, Encoder, Json}
 
 /**
-  * A `text` with `annotations`, each attaching a value to some of its spans.
+  * A text with annotations, each attaching a value to some of its spans.
   * Annotations may overlap and nest one another, but each has at least one
   * span, and its own spans lie within the text, in order, none overlapping
-  * another. [[AnnotatedText.of]] makes one, checking that this holds.
+  * another.
+  *
+  * @param text
+  *   The text annotated.
+  * @param annotations
+  *   Its annotations.
+  * @note
+  *   [[AnnotatedText.of]] makes one, checking that this holds.
   *
   * @tparam A
   *   The type of the annotations' values, specific to the application, such as
@@ -90,25 +98,31 @@ object AnnotatedText:
     * [[JsonSchema.around]] describes.
     */
   def schema(value: Json): Json = JsonSchema.around(value)(value =>
-    Json.obj(
-      "type"        -> Json.fromString("object"),
-      "description" -> Json.fromString(
-        "A text with annotations, each attaching a value to some of its spans.",
-      ),
-      "properties" -> Json.obj(
-        "text" -> Json.obj(
-          "type"        -> Json.fromString("string"),
-          "description" -> Json.fromString("The text."),
+    JsonSchema.described(
+      Json.obj(
+        "type"       -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "text" -> JsonSchema.described(
+            Json.obj("type" -> Json.fromString("string")),
+            doc.flatMap(_.params.get("text")),
+          ),
+          "annotations" -> JsonSchema.described(
+            Json.obj(
+              "type"  -> Json.fromString("array"),
+              "items" -> Annotation.schema(value),
+            ),
+            doc.flatMap(_.params.get("annotations")),
+          ),
         ),
-        "annotations" -> Json.obj(
-          "type"  -> Json.fromString("array"),
-          "items" -> Annotation.schema(value),
-        ),
+        "required"             -> Json.arr(texts("text", "annotations")*),
+        "additionalProperties" -> Json.False,
       ),
-      "required"             -> Json.arr(texts("text", "annotations")*),
-      "additionalProperties" -> Json.False,
+      doc.flatMap(_.description),
     ),
   )
+
+  /** Its Scaladoc, which describes its schema. */
+  private def doc = Scaladoc.of[AnnotatedText[Any]].map(_.plain)
 
   private def texts(names: String*): Seq[Json] = names.map(Json.fromString)
 

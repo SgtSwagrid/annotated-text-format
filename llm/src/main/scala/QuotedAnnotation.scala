@@ -1,12 +1,14 @@
 package com.alecdorrington.annotatedtextformat.llm
 
 import com.alecdorrington.annotatedtextformat.{AnnotatedText, JsonSchema}
+import com.alecdorrington.cadmus.Scaladoc
 import io.circe.{Decoder, Encoder, Json}
 
 /**
   * An annotation of a text as a large language model writes one: by quoting the
   * passage it annotates, rather than by counting its characters, which models
-  * do badly.
+  * do badly. The annotations of a text are given in the order in which their
+  * passages begin.
   *
   * @param quote
   *   The passage annotated, quoted exactly as the text writes it. Where other
@@ -18,8 +20,12 @@ import io.circe.{Decoder, Encoder, Json}
   *   the same words elsewhere, a word or two around it are quoted too, and the
   *   passage itself is marked with "⟦" and "⟧", as in "the ⟦cat⟧ sat". A part
   *   may hold a point or a marked passage, but not both.
-  * @param value
-  *   What the passage is annotated with.
+  *
+  * @note
+  *   Its value has no description here, so that a schema for it keeps its own
+  *   type's. The marks in the quote's description are
+  *   [[QuotedAnnotation.separator]], [[QuotedAnnotation.caret]],
+  *   [[QuotedAnnotation.open]] and [[QuotedAnnotation.close]].
   */
 final case class QuotedAnnotation[+A](quote: String, value: A):
 
@@ -101,40 +107,34 @@ object QuotedAnnotation:
     .filter(_.nonEmpty)
 
   /**
-    * What to tell a model about quoting, so that its quotes can be anchored to
-    * the text.
-    */
-  val instructions: String =
-    s"""Quote each passage that you annotate exactly as the text writes it, never by counting its characters, and give the annotations in the order in which their passages begin.
-       |Where other words split a passage, as they may a separable verb, quote its parts in order, joined by "${ separator
-        .trim }" with a space either side, as in "stehe${ separator }auf".
-       |To mark a point between two characters, as where words belong, quote a word or two around it with "$caret" at the point, as in "is ${ caret }late"; those words are not themselves annotated.
-       |Where a passage could be taken for the same words elsewhere, quote a word or two around it too, and mark the passage itself with "$open" and "$close", as in "the ${ open }cat$close sat". A part may hold a point or a marked passage, but not both."""
-      .stripMargin
-
-  /**
     * The JSON Schema of a quoted annotation whose value conforms to the schema
     * `value`, within a whole schema, to which the definitions of `value`
-    * belong.
+    * belong, described by its Scaladoc.
     */
-  def schema(value: Json): Json = Json.obj(
-    "type"       -> Json.fromString("object"),
-    "properties" -> Json.obj(
-      "quote" -> Json.obj(
-        "type"        -> Json.fromString("string"),
-        "description" -> Json.fromString(
-          s"The passage annotated, quoted exactly as the text writes it, its parts joined by \"${ separator
-              .trim }\", a point marked by \"$caret\", and a passage quoted among words around it marked by \"$open\" and \"$close\".",
+  def schema(value: Json): Json = JsonSchema.described(
+    Json.obj(
+      "type"       -> Json.fromString("object"),
+      "properties" -> Json.obj(
+        "quote" -> JsonSchema.described(
+          Json.obj("type" -> Json.fromString("string")),
+          doc.flatMap(_.params.get("quote")),
         ),
+        "value" -> value,
       ),
-      "value" -> value,
+      "required" -> Json.arr(
+        Json.fromString("quote"),
+        Json.fromString("value"),
+      ),
+      "additionalProperties" -> Json.False,
     ),
-    "required" -> Json.arr(
-      Json.fromString("quote"),
-      Json.fromString("value"),
-    ),
-    "additionalProperties" -> Json.False,
+    doc.flatMap(_.description),
   )
+
+  /**
+    * Its Scaladoc, which describes its schema, and so tells a model how to
+    * quote; but for its value, which the value's own schema describes.
+    */
+  private def doc = Scaladoc.of[QuotedAnnotation[Any]].map(_.plain)
 
   /**
     * The JSON Schema of a list of quoted annotations whose values conform to
@@ -143,10 +143,7 @@ object QuotedAnnotation:
     */
   def listSchema(value: Json): Json = JsonSchema.around(value)(value =>
     Json.obj(
-      "type"        -> Json.fromString("array"),
-      "description" -> Json.fromString(
-        "Annotations of the text, in the order in which their passages begin.",
-      ),
+      "type"  -> Json.fromString("array"),
       "items" -> schema(value),
     ),
   )

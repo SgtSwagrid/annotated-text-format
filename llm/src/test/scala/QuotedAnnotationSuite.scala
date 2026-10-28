@@ -58,6 +58,21 @@ class QuotedAnnotationSuite extends FunSuite:
     )
     assert(schema.downField("$defs").downField("Gloss").succeeded)
 
-  test("The instructions show how parts and points are quoted"):
-    assert(QuotedAnnotation.instructions.contains("stehe … auf"))
-    assert(QuotedAnnotation.instructions.contains("is ‸late"))
+  test("The schema tells how parts, points and marked passages are quoted"):
+    val quote = QuotedAnnotation
+      .schema(Json.obj())
+      .hcursor
+      .downField("properties")
+      .downField("quote")
+      .get[String]("description")
+      .toOption
+      .get
+    List(
+      QuotedAnnotation.separator.trim,
+      QuotedAnnotation.caret.toString,
+      QuotedAnnotation.open.toString,
+      QuotedAnnotation.close.toString,
+      "stehe … auf",
+      "is ‸late",
+    ).foreach(mark => assert(quote.contains(mark), mark))
+    assert(!quote.contains("`"))

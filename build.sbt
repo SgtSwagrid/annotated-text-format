@@ -41,6 +41,7 @@ lazy val `annotated-text-format` = projectMatrix
   .settings(
     packagePrefix   := projectRoot,
     sourceDirectory := (ThisBuild / baseDirectory).value / "src",
+    Dependencies.cadmus,
     Dependencies.circe,
     Dependencies.munit,
   )

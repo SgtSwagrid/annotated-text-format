@@ -269,7 +269,7 @@ class TooltipSuite extends FunSuite:
     val hovering   = Hovering[String](
       tooltip,
       (_, _) => Some(card(document)),
-      focusable = true,
+      focus = Focus.Each(_ => true),
     )
     hovering.add(decoration)
     val parts = decoration.elements(0)
@@ -334,7 +334,7 @@ class TooltipSuite extends FunSuite:
               .text }",
         ))
       ,
-      focusable = true,
+      focus = Focus.Each(_ => true),
     )
     hovering.add(first)
     hovering.add(second)
@@ -392,7 +392,7 @@ class TooltipSuite extends FunSuite:
     val covering = Hovering[String](
       held,
       (_, _) => Some(text(other.ownerDocument, "get up")),
-      focusable = true,
+      focus = Focus.Each(_ => true),
     )
     covering.add(restored)
     covering.add(detached)
@@ -462,7 +462,7 @@ class TooltipSuite extends FunSuite:
         showings :+= showing
         Some(text(described.ownerDocument, "get up"))
       ,
-      focusable = true,
+      focus = Focus.Each(_ => true),
     )
     focusing.add(annotation)
     val word = annotation.elements(0).head
@@ -496,7 +496,7 @@ class TooltipSuite extends FunSuite:
     val hovering   = Hovering[String](
       tooltip,
       (_, _) => Some(card(document)),
-      focusable = true,
+      focus = Focus.Each(_ => true),
     )
     hovering.add(decoration)
     val element = decoration.elements(0).head
@@ -514,3 +514,156 @@ class TooltipSuite extends FunSuite:
     Jsdom.press(document, "Escape")
     assert(!tooltip.isOpen)
     hovering.stop()
+
+  /** `paragraph`, with `annotations` of its text, decorated. */
+  private def annotated
+    (
+      paragraph: dom.Element,
+      annotations: Annotation[String]*,
+    )
+    : Decoration[String] =
+    val passage = Passage(paragraph)
+    Decorator
+      .decorate(
+        passage,
+        passage.annotate(annotations.toList).toOption.get,
+        look,
+      )
+      .toOption
+      .get
+
+  /** The `tabindex` of the first element of each annotation of `decoration`. */
+  private def stops(decoration: Decoration[String]): List[Option[String]] =
+    decoration
+      .annotated
+      .annotations
+      .indices
+      .toList
+      .map(index =>
+        Option(decoration.elements(index).head.getAttribute("tabindex")),
+      )
+
+  private def active(document: dom.Document): dom.Element = document
+    .asInstanceOf[dom.HTMLDocument]
+    .activeElement
+
+  test(
+    "Roving, a decoration is one stop of Tab, the arrow keys moving among its annotations, and the last focused the stop",
+  ):
+    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
+    val document   = paragraph.ownerDocument
+    val decoration = annotated(
+      paragraph,
+      Annotation(Span(0, 3), "I"),
+      Annotation(Span(4, 9), "stand"),
+      Annotation(Span(10, 14), "early"),
+    )
+    val tooltip  = Tooltip(document)
+    val hovering = Hovering[String](
+      tooltip,
+      (hovered, _) => hovered.values.headOption.map(text(document, _)),
+      focus = Focus.Roving(_ => true),
+    )
+    hovering.add(decoration)
+    assertEquals(
+      stops(decoration),
+      List(Some("0"), Some("-1"), Some("-1")),
+    )
+    val first = decoration.elements(0).head.asInstanceOf[dom.HTMLElement]
+    first.focus()
+    assertEquals(shown(tooltip), "I")
+    Jsdom.press(document, "ArrowRight")
+    assert(active(document) eq decoration.elements(1).head)
+    assertEquals(shown(tooltip), "stand")
+    assertEquals(
+      stops(decoration),
+      List(Some("-1"), Some("0"), Some("-1")),
+    )
+    Jsdom.press(document, "ArrowRight")
+    Jsdom.press(document, "ArrowRight")
+    assert(active(document) eq decoration.elements(2).head)
+    Jsdom.press(document, "ArrowLeft")
+    assert(active(document) eq decoration.elements(1).head)
+    assertEquals(shown(tooltip), "stand")
+    hovering.stop()
+    assertEquals(
+      stops(decoration),
+      List(None, None, None),
+    )
+
+  test(
+    "Only the annotations whose values are given take the focus, and none within a link",
+  ):
+    val paragraph =
+      Jsdom.element("""<p>Ich <a href="#">stehe</a> früh auf.</p>""")
+    val document   = paragraph.ownerDocument
+    val decoration = annotated(
+      paragraph,
+      Annotation(Span(0, 3), "I"),
+      Annotation(Span(4, 9), "stand"),
+      Annotation(Span(10, 14), "early"),
+    )
+    val hovering = Hovering[String](
+      Tooltip(document),
+      (hovered, _) => hovered.values.headOption.map(text(document, _)),
+      focus = Focus.Each(_ != "I"),
+    )
+    hovering.add(decoration)
+    assertEquals(
+      stops(decoration),
+      List(None, None, Some("0")),
+    )
+    hovering.stop()
+
+  test(
+    "Escape closes a tooltip that the pointer opened, and goes on to the page, but not one that the focus opened",
+  ):
+    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
+    val document   = paragraph.ownerDocument
+    val window     = document.asInstanceOf[js.Dynamic].defaultView
+    val decoration = decorated(paragraph, List(Span(4, 9)))
+    val tooltip    = Tooltip(document)
+    val hovering   = Hovering[String](
+      tooltip,
+      (_, _) => Some(text(document, "get up")),
+      focus = Focus.Each(_ => true),
+    )
+    hovering.add(decoration)
+    var heard    = 0
+    val listener =
+      (event: dom.KeyboardEvent) => if event.key == "Escape" then heard += 1
+    window.addEventListener(
+      "keydown",
+      listener: js.Function1[dom.KeyboardEvent, Unit],
+    )
+    val element = decoration.elements(0).head
+    Jsdom.move(element.firstChild, 0, 0)
+    assert(tooltip.isOpen)
+    Jsdom.press(document, "Escape")
+    assert(!tooltip.isOpen)
+    assertEquals(heard, 1)
+    element.asInstanceOf[dom.HTMLElement].focus()
+    assert(tooltip.isOpen)
+    Jsdom.press(document, "Escape")
+    assert(!tooltip.isOpen)
+    assertEquals(heard, 1)
+    hovering.stop()
+
+  test(
+    "A tooltip's own styles hold against the page's rules for every element",
+  ):
+    val tooltip = Tooltip(Jsdom.element("<p>x</p>").ownerDocument)
+    val own     = tooltip
+      .host
+      .asInstanceOf[js.Dynamic]
+      .shadowRoot
+      .firstChild
+      .textContent
+      .asInstanceOf[String]
+    List(
+      "display: block !important",
+      "position: fixed !important",
+      "padding: 0 !important",
+      "display: none !important",
+    ).foreach(rule => assert(own.contains(rule), rule))
+    assert(!own.contains("inset: auto !important"))

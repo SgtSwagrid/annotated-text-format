@@ -48,23 +48,31 @@ final class Passage private (
     * The spans in [[text]] of its elements that are not prose, those of
     * decorations among them, within which nothing is annotated.
     */
-  private[dom] val atoms: Vector[Span] = parts
+  private[dom] val atoms: Vector[(dom.Element, Span)] = parts
     .zip(starts)
-    .collect { case (part @ Passage.Part.Atom(_), start) =>
-      Span(start, start + part.text.length)
+    .collect { case (part @ Passage.Part.Atom(element), start) =>
+      element -> Span(start, start + part.text.length)
     }
 
   /**
     * Where `offset` within `node` lies in its text, if `node` is one of its
-    * text nodes, or an element whose child at `offset`, or else whose end, is
-    * at one.
+    * text nodes, or within an element that is not prose, as a decoration's,
+    * where a reader may select what it shows, or an element whose child at
+    * `offset`, or else whose end, is at one.
+    *
+    * A passage is of the page as it was when read, so these, [[spanOf]] and
+    * [[rangeOf]] find nothing in what has changed since, as text nodes that a
+    * decoration has split; read it again, then, as `Passage(root)`.
     */
   def offsetOf(node: dom.Node, offset: Int): Option[Int] =
     if node.nodeType == Passage.textNode then
-      texts.collectFirst {
-        case (text, span) if text eq node =>
-          span.start + offset.max(0).min(text.data.length)
-      }
+      texts
+        .collectFirst {
+          case (text, span)
+            if (text eq node) && text.data.length == span.end - span.start =>
+            span.start + offset.max(0).min(text.data.length)
+        }
+        .orElse(inAtom(node.asInstanceOf[dom.Text], offset))
     else
       val nodes = node.childNodes
       if offset < nodes.length then first(nodes(offset)).flatMap(offsetOf(_, 0))
@@ -94,11 +102,32 @@ final class Passage private (
         at(span.start, after = false).orElse(at(span.start, after = true))
       (endNode, end) <-
         at(span.end, after = true).orElse(at(span.end, after = false))
+      if start <= startNode.data.length && end <= endNode.data.length
     yield
       val range = document.createRange()
       range.setStart(startNode, start)
       range.setEnd(endNode, end)
       range
+
+  /**
+    * Where `offset` within `text`, within one of its elements that are not
+    * prose, lies in its text: in what a decoration shows, or else at the
+    * element's placeholder.
+    */
+  private def inAtom(text: dom.Text, offset: Int): Option[Int] = atoms
+    .collectFirst {
+      case (element, span) if element.contains(text) =>
+        if !element.hasAttribute(Passage.decorated) then span.start
+        else
+          val before = Passage
+            .textsWithin(element)
+            .takeWhile(_ ne text)
+            .map(_.data.length)
+            .sum
+          (span.start + before + offset.max(0).min(text.data.length)).min(
+            span.end,
+          )
+    }
 
   /** The first of its text nodes within or after `node`, in order. */
   private def first(node: dom.Node): Option[dom.Text] = texts
@@ -322,6 +351,11 @@ object Passage:
     )
     : Boolean = element.hasAttribute(decorated) || nonProse(element) ||
     skip(element)
+
+  /** The text nodes within `node`, in order. */
+  private def textsWithin(node: dom.Node): List[dom.Text] =
+    if node.nodeType == textNode then List(node.asInstanceOf[dom.Text])
+    else children(node).flatMap(textsWithin)
 
   /** Whether `node` comes after `other` in the page, and not within it. */
   private def follows(node: dom.Node, other: dom.Node): Boolean =

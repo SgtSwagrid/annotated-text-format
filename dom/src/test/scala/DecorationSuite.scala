@@ -705,10 +705,7 @@ class DecorationSuite extends FunSuite:
       .get
     assertEquals(
       splits,
-      List(
-        "She always" -> " is late.",
-        "She "       -> "always",
-      ),
+      List("She " -> " is late.", "She " -> "always"),
     )
 
   test("The classes that a look gives are on its elements while shown"):
@@ -729,3 +726,105 @@ class DecorationSuite extends FunSuite:
     assert(!element.classList.contains("known"))
     decoration.show(0)
     assert(element.classList.contains("known"))
+
+  test("Decorations of one page may be restored in any order"):
+    val paragraph = Jsdom.element("<p>She always is late.</p>")
+    val page      = paragraph.firstChild
+    val first     = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    val second = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(14, 18)), "y"),
+    )
+    first.restore()
+    second.restore()
+    assertEquals(paragraph.childNodes.length, 1)
+    assert(paragraph.firstChild eq page)
+    assertEquals(
+      page.textContent,
+      "She always is late.",
+    )
+
+  test("A passage read before the page changed finds nothing there"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val stale      = Passage(paragraph)
+    val decoration = decorate(
+      paragraph,
+      kept,
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    assertEquals(stale.rangeOf(Span(14, 18)), None)
+    val fresh = Passage(paragraph)
+    assertEquals(
+      fresh.rangeOf(Span(14, 18)).map(_.toString()),
+      Some("late"),
+    )
+    assertEquals(
+      fresh.offsetOf(
+        decoration.elements(0).head.firstChild,
+        2,
+      ),
+      Some(6),
+    )
+
+  test("Placed whole, an annotation drawn only in part is left out"):
+    val page = Jsdom.element("<div><p>Ich stehe auf.</p><p>Er geht.</p></div>")
+    val passage    = Passage(page)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage
+          .annotate(List(
+            Annotation(List(Span(4, 9)), List("stand")),
+            Annotation(List(Span(6, 9)), List("x")),
+            Annotation(List(Span.point(6)), List("y")),
+            Annotation(List(Span(14, 15)), List("z")),
+          ))
+          .toOption
+          .get,
+        translated,
+        whole = true,
+      )
+      .toOption
+      .get
+    assertEquals(decoration.unplaced, Set(1, 2, 3))
+    assertEquals(texts(page), List("stand"))
+
+  test("A split hook that throws is passed over, the page decorated whole"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val passage    = Passage(paragraph)
+    val decoration = Decorator
+      .decorate(
+        passage,
+        passage.annotate(List(Annotation(List(Span(4, 10)), "x"))).toOption.get,
+        kept,
+        split = (_, _) => throw new RuntimeException("refused"),
+      )
+      .toOption
+      .get
+    assertEquals(texts(paragraph), List("always"))
+    decoration.restore()
+    assertEquals(
+      paragraph.textContent,
+      "She always is late.",
+    )
+
+  test("A look cannot give the decoration's own classes"):
+    val paragraph  = Jsdom.element("<p>She always is late.</p>")
+    val decoration = decorate(
+      paragraph,
+      Look[String](
+        _ => Colour("teal"),
+        classes = _ => List("atf-lit", "atf"),
+      ),
+      Annotation(List(Span(4, 10)), "x"),
+    )
+    val element = decoration.elements(0).head
+    assert(!element.classList.contains("atf-lit"))
+    decoration.hide(0)
+    decoration.show(0)
+    assert(element.classList.contains("atf"))

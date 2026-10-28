@@ -6,9 +6,9 @@ import com.alecdorrington.annotatedtextformat.{
 import scala.collection.mutable
 
 /**
-  * Quoted annotations anchored to a text: those found, as `annotated`, and
-  * those not, as `unplaced`, which may be sent back to the model that wrote
-  * them.
+  * QuotedAnnotation annotations anchored to a text: those found, as
+  * `annotated`, and those not, as `unplaced`, which may be sent back to the
+  * model that wrote them.
   */
 final case class Anchored[+A]
   (
@@ -26,7 +26,7 @@ final case class Anchored[+A]
 final case class Unplaced[+A]
   (
     index: Int,
-    quoted: Quoted[A],
+    quoted: QuotedAnnotation[A],
     reason: Unplaced.Reason,
   ):
 
@@ -59,36 +59,22 @@ object Unplaced:
       case Missing =>
         "which is not in the text. Quote the passage exactly as the text writes it."
       case OutOfOrder =>
-        s"which is in the text more than once, but not after the passage of the annotation before it. Give the annotations in the order in which their passages begin, or quote a word or two around the passage, marking the passage itself with \"${ Quoted
-            .open }\" and \"${ Quoted.close }\"."
+        s"which is in the text more than once, but not after the passage of the annotation before it. Give the annotations in the order in which their passages begin, or quote a word or two around the passage, marking the passage itself with \"${ QuotedAnnotation
+            .open }\" and \"${ QuotedAnnotation.close }\"."
       case Empty     => "which holds nothing to find in the text."
       case Unordered =>
         "whose parts are not in the text apart from one another, in order."
 
-/** Finds where quoted annotations are in a text, and quotes annotations. */
-object Anchoring:
+/**
+  * How quoted annotations are found in a text, and annotations quoted, as
+  * [[QuotedAnnotation.anchor]] and [[QuotedAnnotation.quote]] describe.
+  */
+private[llm] object Anchoring:
 
-  /**
-    * `quoted`, anchored to `text`, as given in the order in which their
-    * passages begin. Each is placed by the first of these ways that finds it:
-    *   - where it first occurs from where the one before it began on, but not
-    *     just where that one is, as a passage nested in it may begin where it
-    *     does, but a word quoted again is a later occurrence;
-    *   - else just where the one before it is, as two may annotate the same
-    *     words;
-    *   - else wherever it occurs only once, as a model may give one out of
-    *     order, though where the search goes on from never moves back.
-    *
-    * Within each way, the quote is sought as written before as loosely as
-    * `matching` allows, so that a correction of the case or spacing of a word
-    * lands on the word as written. Each part of a quote is found after the part
-    * before it, and a quote holding an ellipsis is first sought whole, as the
-    * text may hold one.
-    */
   def anchor[A]
     (
       text: String,
-      quoted: List[Quoted[A]],
+      quoted: List[QuotedAnnotation[A]],
       matching: Matching = Matching(),
     )
     : Anchored[A] = quoted
@@ -96,29 +82,18 @@ object Anchoring:
     .foldLeft(Search[A](text, matching))(_.next.tupled(_))
     .anchored
 
-  /**
-    * The annotations of `annotated`, in the order in which they begin, quoted
-    * as a model would write them, each with as few words around it as anchor it
-    * back to where it is, as [[anchor]] finds it: none, unless the same words
-    * stand earlier where they would be found instead, and then a word or more
-    * either side, the passage marked between them. Each point is quoted with
-    * the word on either side of it, or more.
-    *
-    * An annotation that no quote within reach places back, as in a text
-    * repeating the same words further than eight words either side, or one
-    * holding [[Quoted.caret]], [[Quoted.open]] or [[Quoted.close]] itself, is
-    * quoted with as many words around it as may be, and may not anchor back;
-    * [[anchor]] tells which do not, by where it places them.
-    */
   def quote[A]
     (
       annotated: AnnotatedText[A],
       matching: Matching = Matching(),
     )
-    : List[Quoted[A]] = annotated
+    : List[QuotedAnnotation[A]] = annotated
     .annotations
     .sortBy(_.spans.headOption.fold(0)(_.start))
-    .foldLeft((Search[A](annotated.text, matching), Vector.empty[Quoted[A]])):
+    .foldLeft((
+      Search[A](annotated.text, matching),
+      Vector.empty[QuotedAnnotation[A]],
+    )):
       case ((search, quotes), annotation) =>
         val quoted = Quoting(annotated.text).of(annotation, search)
         (search.next(quoted, quotes.size), quotes :+ quoted)
@@ -140,10 +115,10 @@ private final case class Quoting(text: String):
       annotation: Annotation[A],
       search: Search[A],
     )
-    : Quoted[A] =
+    : QuotedAnnotation[A] =
     val quotes = (0 to reach)
       .map(context =>
-        Quoted(
+        QuotedAnnotation(
           quote(annotation, context),
           annotation.value,
         ),
@@ -152,7 +127,7 @@ private final case class Quoting(text: String):
     quotes.find(search.placesBack(_, annotation.spans)).getOrElse(quotes.last)
 
   private def quote(annotation: Annotation[?], context: Int): String =
-    annotation.spans.map(part(_, context)).mkString(Quoted.separator)
+    annotation.spans.map(part(_, context)).mkString(QuotedAnnotation.separator)
 
   /**
     * `span`, quoted with `context` words on either side of it, marked between
@@ -163,7 +138,7 @@ private final case class Quoting(text: String):
       around(
         span,
         context + 1,
-        Quoted.caret.toString,
+        QuotedAnnotation.caret.toString,
         "",
       )
     else if context == 0 then span.in(text)
@@ -171,8 +146,8 @@ private final case class Quoting(text: String):
       around(
         span,
         context,
-        Quoted.open.toString,
-        Quoted.close.toString,
+        QuotedAnnotation.open.toString,
+        QuotedAnnotation.close.toString,
       )
 
   private def around
@@ -226,7 +201,7 @@ private final case class Search[A]
   ):
 
   /** It, with `quoted`, at `index`, placed or not. */
-  def next(quoted: Quoted[A], index: Int): Search[A] =
+  def next(quoted: QuotedAnnotation[A], index: Int): Search[A] =
     Finding(text, matching, cursor, previous).place(quoted.quote) match
       case Right(spans) => copy(
           cursor = cursor.max(spans.head.start),
@@ -237,7 +212,12 @@ private final case class Search[A]
         copy(unplaced = unplaced :+ Unplaced(index, quoted, reason))
 
   /** Whether `quoted`, placed next, is placed at `spans`. */
-  def placesBack(quoted: Quoted[A], spans: List[Span]): Boolean =
+  def placesBack
+    (
+      quoted: QuotedAnnotation[A],
+      spans: List[Span],
+    )
+    : Boolean =
     val next = this.next(quoted, unplaced.size + found.size)
     next.found.size > found.size && next.found.last.spans == spans
 
@@ -373,5 +353,5 @@ private object Finding:
     * the text may hold an ellipsis itself, and then in its parts.
     */
   def readings(quote: String): List[List[String]] =
-    val parts = Quoted.parts(quote)
+    val parts = QuotedAnnotation.parts(quote)
     Option.when(parts.size > 1)(List(quote.trim)).toList :+ parts

@@ -23,7 +23,9 @@ class QuotedAnnotationSuite extends FunSuite:
     )
     assertEquals(QuotedAnnotation.parts("  "), Nil)
 
-  test("A quoted annotation is written as its quote and its value"):
+  test(
+    "A quoted annotation is written as its quote and its value, and a list's schema lifts the value's definitions to its root",
+  ):
     val quoted = QuotedAnnotation("stehe … auf", "get up")
     assertEquals(
       quoted.asJson,
@@ -36,8 +38,6 @@ class QuotedAnnotationSuite extends FunSuite:
       decode[QuotedAnnotation[String]](quoted.asJson.noSpaces),
       Right(quoted),
     )
-
-  test("A list's schema lifts the value's definitions to its root"):
     val value = Json.obj(
       "$ref"  -> Json.fromString("#/$defs/Gloss"),
       "$defs" ->

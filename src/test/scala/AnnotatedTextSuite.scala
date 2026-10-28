@@ -9,27 +9,27 @@ class AnnotatedTextSuite extends FunSuite:
   /** The separable verb "stehe … auf", annotated as one. */
   private val verb = Annotation(List(Span(4, 9), Span(15, 18)), "get up")
 
-  test("A span counts the characters within it, and a point holds none"):
+  test(
+    "A span counts the characters within it, a point lies at its ends but never overlaps it, and spans are as far apart as the characters between them",
+  ):
     assertEquals(Span(4, 9).length, 5)
     assertEquals(Span(4, 9).in(text), "stehe")
     assert(Span.point(3).isPoint)
     assert(!Span(4, 9).isPoint)
-
-  test(
-    "A point lies within a span at either of its ends, but never overlaps it",
-  ):
     assert(Span(4, 9).covers(Span.point(4)))
     assert(Span(4, 9).covers(Span.point(9)))
     assert(!Span(4, 9).overlaps(Span.point(6)))
     assert(Span(4, 9).overlaps(Span(8, 12)))
     assert(!Span(4, 9).overlaps(Span(9, 12)))
-
-  test("Spans are as far apart as the characters between them"):
     assertEquals(Span(0, 3).distance(Span(5, 6)), 2)
     assertEquals(Span(5, 6).distance(Span(0, 3)), 2)
     assertEquals(Span(0, 3).distance(Span(2, 6)), 0)
+    assertEquals(verb.extent, Some(Span(4, 18)))
+    assertEquals(Annotation(Nil, "nothing").extent, None)
 
-  test("Annotations whose spans fit the text make an annotated text"):
+  test(
+    "Annotations whose spans fit the text make an annotated text, touching, overlapping and nesting as they may",
+  ):
     val annotated = AnnotatedText.of(text, List(verb))
     assertEquals(
       annotated.map(_.annotations),
@@ -39,23 +39,31 @@ class AnnotatedTextSuite extends FunSuite:
       annotated.map(_.annotations.head.in(text)),
       Right(List("stehe", "auf")),
     )
+    val touching = Annotation(
+      List(Span(0, 3), Span.point(3), Span(3, 4)),
+      "",
+    )
+    assert(AnnotatedText.of(text, List(touching)).isRight)
+    val nested = List(
+      Annotation(Span(4, 18), "outer"),
+      Annotation(Span(4, 9), "inner"),
+    )
+    assert(AnnotatedText.of(text, nested :+ verb).isRight)
 
-  test("An annotation with no spans is refused"):
+  test(
+    "An annotation with no spans, or a span outside the text, out of order or splitting a character, is refused",
+  ):
     assertEquals(
       AnnotatedText.of(text, List(Annotation(Nil, "nothing"))),
       Left(List(Problem.Unspanned(0))),
     )
-
-  test("A span outside the text, or ending before it begins, is refused"):
-    val spans = List(Span(-1, 2), Span(3, 2), Span(15, 30))
+    val outside = List(Span(-1, 2), Span(3, 2), Span(15, 30))
     assertEquals(
-      AnnotatedText.of(text, spans.map(Annotation(_, ""))),
+      AnnotatedText.of(text, outside.map(Annotation(_, ""))),
       Left(
-        spans.zipWithIndex.map((span, index) => Problem.Outside(index, span)),
+        outside.zipWithIndex.map((span, index) => Problem.Outside(index, span)),
       ),
     )
-
-  test("Spans out of order, overlapping, or the same point twice are refused"):
     val unordered = List(
       List(Span(15, 18), Span(4, 9)),
       List(Span(4, 9), Span(8, 12)),
@@ -65,20 +73,22 @@ class AnnotatedTextSuite extends FunSuite:
       AnnotatedText.of(text, unordered.map(Annotation(_, ""))),
       Left(unordered.indices.map(Problem.Unordered(_)).toList),
     )
-
-  test("A span may end where the next begins, and a point stand at its end"):
-    val touching = Annotation(
-      List(Span(0, 3), Span.point(3), Span(3, 4)),
-      "",
+    val emoji = "I love it 😀 so"
+    assertEquals(
+      AnnotatedText.of(
+        emoji,
+        List(Annotation(Span(10, 11), "half")),
+      ),
+      Left(List(Problem.Splits(0, Span(10, 11)))),
     )
-    assert(AnnotatedText.of(text, List(touching)).isRight)
-
-  test("Annotations may overlap and nest one another"):
-    val nested = List(
-      Annotation(Span(4, 18), "outer"),
-      Annotation(Span(4, 9), "inner"),
+    assert(
+      AnnotatedText
+        .of(
+          emoji,
+          List(Annotation(Span(10, 12), "whole")),
+        )
+        .isRight,
     )
-    assert(AnnotatedText.of(text, nested :+ verb).isRight)
 
   test("Values are mapped, filtered and collected, keeping their spans"):
     val annotated = AnnotatedText
@@ -101,7 +111,9 @@ class AnnotatedTextSuite extends FunSuite:
       List(verb.map(_ => 1)),
     )
 
-  test("Annotated texts join only if they are of the same text"):
+  test(
+    "Annotated texts join only if they are of the same text, and only the annotations that fit are kept, if asked",
+  ):
     val one = AnnotatedText.of(text, List(verb)).toOption.get
     assertEquals(
       (one ++ one).map(_.annotations.size),
@@ -111,8 +123,6 @@ class AnnotatedTextSuite extends FunSuite:
       one ++ AnnotatedText.plain("Other."),
       Left(List(Problem.OtherText)),
     )
-
-  test("Only the annotations that fit the text are kept, if asked"):
     val stale = List(
       Annotation(Span(4, 9), "kept"),
       Annotation(Span(15, 40), "left out"),
@@ -121,25 +131,3 @@ class AnnotatedTextSuite extends FunSuite:
       AnnotatedText.fitting(text, stale).annotations.map(_.value),
       List("kept"),
     )
-
-  test("A span that splits a character of two code units is refused"):
-    val emoji = "I love it 😀 so"
-    assertEquals(
-      AnnotatedText.of(
-        emoji,
-        List(Annotation(Span(10, 11), "half")),
-      ),
-      Left(List(Problem.Splits(0, Span(10, 11)))),
-    )
-    assert(
-      AnnotatedText
-        .of(
-          emoji,
-          List(Annotation(Span(10, 12), "whole")),
-        )
-        .isRight,
-    )
-
-  test("An annotation with no spans has no extent"):
-    assertEquals(Annotation(Nil, "nothing").extent, None)
-    assertEquals(verb.extent, Some(Span(4, 18)))

@@ -20,7 +20,7 @@ class JsonSchemaSuite extends FunSuite:
   )((json, key) => json.flatMap(_.hcursor.downField(key).focus))
 
   test(
-    "An annotated text's schema holds the value's at each annotation's value",
+    "An annotated text's schema holds the value's at each annotation's value, its definitions lifted to the root, which alone declares the dialect",
   ):
     assertEquals(
       at(
@@ -33,16 +33,10 @@ class JsonSchemaSuite extends FunSuite:
       ),
       Some(Json.obj("$ref" -> Json.fromString("#/$defs/Remark"))),
     )
-
-  test(
-    "The value's definitions are lifted to the root, where its references resolve",
-  ):
     assertEquals(
       at(schema, "$defs", "Remark"),
       Some(Json.obj("type" -> Json.fromString("string"))),
     )
-
-  test("Only the root declares the dialect"):
     assertEquals(
       at(schema, "$schema"),
       Some(Json.fromString(JsonSchema.dialect)),
@@ -60,7 +54,9 @@ class JsonSchemaSuite extends FunSuite:
       None,
     )
 
-  test("A value with an identity of its own keeps its definitions"):
+  test(
+    "A value with an identity of its own keeps its definitions, and the empty schema allows any value",
+  ):
     val identified =
       value.deepMerge(Json.obj("$id" -> Json.fromString("urn:remark")))
     val embedded = at(
@@ -75,8 +71,6 @@ class JsonSchemaSuite extends FunSuite:
       embedded.flatMap(at(_, "$defs", "Remark")),
       at(value, "$defs", "Remark"),
     )
-
-  test("Any value is allowed by the empty schema"):
     assertEquals(
       at(
         AnnotatedText.schema(Json.obj()),

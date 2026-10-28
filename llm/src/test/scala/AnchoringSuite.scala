@@ -9,10 +9,10 @@ class AnchoringSuite extends FunSuite:
   private def spans(text: String, quotes: String*): List[List[Span]] =
     anchored(text, quotes*).annotated.annotations.map(_.spans)
 
-  private def anchored(text: String, quotes: String*): Anchored[Int] = Anchoring
-    .anchor(
+  private def anchored(text: String, quotes: String*): Anchored[Int] =
+    QuotedAnnotation.anchor(
       text,
-      quotes.toList.zipWithIndex.map(Quoted(_, _)),
+      quotes.toList.zipWithIndex.map(QuotedAnnotation(_, _)),
     )
 
   private def parts(text: String, quotes: String*): List[List[String]] =
@@ -131,10 +131,10 @@ class AnchoringSuite extends FunSuite:
       List(List(Span(16, 19))),
     )
     assertEquals(
-      Anchoring
+      QuotedAnnotation
         .anchor(
           "concatenate",
-          List(Quoted("cat", ())),
+          List(QuotedAnnotation("cat", ())),
           Matching(wholeWords = false),
         )
         .annotated
@@ -268,10 +268,10 @@ class AnchoringSuite extends FunSuite:
       )
       .toOption
       .get
-    val quoted = Anchoring.quote(annotated)
+    val quoted = QuotedAnnotation.quote(annotated)
     val sorted = annotated.annotations.sortBy(_.spans.head.start)
     assertEquals(
-      Anchoring.anchor(text, quoted).annotated.annotations,
+      QuotedAnnotation.anchor(text, quoted).annotated.annotations,
       sorted,
     )
     assertEquals(
@@ -326,8 +326,11 @@ class AnchoringSuite extends FunSuite:
     annotations.foreach(annotation =>
       val annotated = AnnotatedText.of(text, List(annotation)).toOption.get
       assertEquals(
-        Anchoring
-          .anchor(text, Anchoring.quote(annotated))
+        QuotedAnnotation
+          .anchor(
+            text,
+            QuotedAnnotation.quote(annotated),
+          )
           .annotated
           .annotations,
         List(annotation),
@@ -347,6 +350,12 @@ class AnchoringSuite extends FunSuite:
       .toOption
       .get
     assertEquals(
-      Anchoring.anchor(text, Anchoring.quote(annotated)).annotated.annotations,
+      QuotedAnnotation
+        .anchor(
+          text,
+          QuotedAnnotation.quote(annotated),
+        )
+        .annotated
+        .annotations,
       annotated.annotations,
     )

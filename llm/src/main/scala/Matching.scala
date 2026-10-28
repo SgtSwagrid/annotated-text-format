@@ -5,8 +5,8 @@ import java.util.regex.{Matcher, Pattern}
 
 /**
   * How loosely a part of a quote may match the text, as a model may quote it a
-  * little otherwise than it is written. [[Anchoring]] tries the text as it is
-  * quoted first, and only then as loosely as this allows.
+  * little otherwise than it is written. [[QuotedAnnotation.anchor]] tries the
+  * text as it is quoted first, and only then as loosely as this allows.
   *
   * Letters are matched in either case by folding each character to lower case,
   * alike on the JVM and in JavaScript; so `"kiz"` never matches `"kız"`, and
@@ -345,9 +345,9 @@ private object Token:
       case _                                     => tokens.map(literal)
 
   private def literal(token: Token): Token = token match
-    case Caret => Other(Quoted.caret.toString)
-    case Open  => Other(Quoted.open.toString)
-    case Close => Other(Quoted.close.toString)
+    case Caret => Other(QuotedAnnotation.caret.toString)
+    case Open  => Other(QuotedAnnotation.open.toString)
+    case Close => Other(QuotedAnnotation.close.toString)
     case _     => token
 
   /**
@@ -375,10 +375,13 @@ private object Token:
     * alone.
     */
   private def runs(units: List[String]): List[Token] = units match
-    case Nil                                        => Nil
-    case unit :: _ if unit == Quoted.caret.toString => Caret :: runs(units.tail)
-    case unit :: _ if unit == Quoted.open.toString  => Open :: runs(units.tail)
-    case unit :: _ if unit == Quoted.close.toString => Close :: runs(units.tail)
+    case Nil                                                  => Nil
+    case unit :: _ if unit == QuotedAnnotation.caret.toString =>
+      Caret :: runs(units.tail)
+    case unit :: _ if unit == QuotedAnnotation.open.toString =>
+      Open :: runs(units.tail)
+    case unit :: _ if unit == QuotedAnnotation.close.toString =>
+      Close :: runs(units.tail)
     case unit :: _ if space(unit)  => run(units, space, Space(_))
     case unit :: _ if wordly(unit) => run(units, wordly, Word(_))
     case unit :: rest              => Other(unit) :: runs(rest)

@@ -33,13 +33,15 @@ val onJvm = Seq(Test / fork := true)
 // Every project is named after the library so as not to clash with the
 // projects of a build that includes this one by reference. A matrix resolves
 // sources against the working directory, which is not this build's base when
-// another build includes it by reference, so each names its own.
+// another build includes it by reference, so each names its own. The matrices
+// built for both the JVM and JS keep their sources in their packages'
+// directories rather than under a package prefix, as IntelliJ never gives one
+// to the sources the two share.
 
 /** The format itself: annotated text, its validation, codecs and JSON Schema. */
 lazy val `annotated-text-format` = projectMatrix
   .in(file("."))
   .settings(
-    packagePrefix   := projectRoot,
     sourceDirectory := (ThisBuild / baseDirectory).value / "src",
     Dependencies.cadmus,
     Dependencies.circe,
@@ -59,7 +61,6 @@ lazy val `annotated-text-format-llm` = projectMatrix
   .in(file("llm"))
   .dependsOn(`annotated-text-format`)
   .settings(
-    packagePrefix   := s"$projectRoot.llm",
     sourceDirectory := (ThisBuild / baseDirectory).value / "llm" / "src",
     Dependencies.circe,
     Dependencies.munit,
@@ -95,8 +96,10 @@ lazy val `annotated-text-format-root` = project
     publish / skip := true,
 
     // The root shares the core's directory, so must not build its sources.
-    Compile / unmanagedSourceDirectories := Nil,
-    Test / unmanagedSourceDirectories    := Nil,
+    Compile / unmanagedSourceDirectories   := Nil,
+    Test / unmanagedSourceDirectories      := Nil,
+    Compile / unmanagedResourceDirectories := Nil,
+    Test / unmanagedResourceDirectories    := Nil,
 
     // Only the JS side has every module, and the JVM's would document the
     // same sources again.

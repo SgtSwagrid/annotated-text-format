@@ -17,6 +17,14 @@ class SpacingSuite extends FunSuite:
       Some(Span(1, 2)),
     )
     assertEquals(Spacing.beside("a\nb", Span(2, 3)), None)
+    assertEquals(
+      Spacing.besides("I really like it.", Span(2, 8)),
+      List(Span(8, 9), Span(1, 2)),
+    )
+    assertEquals(
+      Spacing.besides("I like.", Span(2, 6)),
+      List(Span(1, 2)),
+    )
 
   test(
     "A word put in is spaced off the words beside it, but not in a script that does not space them, nor beside a full-width stop or a character beyond the basic plane",

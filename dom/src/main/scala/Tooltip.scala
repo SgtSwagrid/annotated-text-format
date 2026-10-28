@@ -170,6 +170,11 @@ object Tooltip:
     * `sheets`, made for `document`, and which the pointer may move onto and
     * use, unless not `interactive`, when it is named `label`, as for a reader
     * of the screen. Its shadow root is `closed` to the page's scripts if so.
+    *
+    * The page's own rules for every element, as `* { padding: 0 }`, outweigh
+    * rules for the host, `:host`, unless those are marked `!important`, as its
+    * own are; so mark those of `styles` too, but never `top`, `left` or `all`,
+    * which would then outweigh where it is placed.
     */
   def apply
     (
@@ -365,22 +370,25 @@ object Tooltip:
     "input, textarea, select, [contenteditable]:not([contenteditable='false'])"
 
   /** What takes the focus. */
-  private val focusable =
+  private[dom] val focusable =
     "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type='hidden']), select:not([disabled]), textarea:not([disabled]), [contenteditable]:not([contenteditable='false']), [tabindex]:not([tabindex='-1'])"
 
   /**
     * Its own styles, which reset all that it inherits from the page, keep it
     * within the window, scrolling within itself, and hide it while it is
-    * closed, as resetting everything would show it then.
+    * closed, as resetting everything would show it then. Each but `all` and
+    * `inset` is `!important`, so that the page's rules for every element do not
+    * outweigh it; those two are not, as they would then outweigh where it is
+    * placed, which is set on the host itself.
     */
   private def own(interactive: Boolean): String =
-    s""":host { all: initial; display: block; position: fixed; inset: auto; margin: 0; padding: 0; border: 0; background: none; box-sizing: border-box; max-width: calc(100vw - ${ 2 *
-        Placement.margin }px); max-height: calc(100vh - ${ 2 *
-        Placement.margin }px); max-height: calc(100dvh - ${ 2 *
-        Placement.margin }px); overflow: auto;${
-        if interactive then "" else " pointer-events: none;"
+    s""":host { all: initial; inset: auto; display: block !important; position: fixed !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-sizing: border-box !important; max-width: calc(100vw - ${ 2 *
+        Placement.margin }px) !important; max-height: calc(100vh - ${ 2 *
+        Placement.margin }px) !important; max-height: calc(100dvh - ${ 2 *
+        Placement.margin }px) !important; overflow: auto !important;${
+        if interactive then "" else " pointer-events: none !important;"
       } }
-       |:host([hidden]) { display: none; }
+       |:host([hidden]) { display: none !important; }
        |""".stripMargin
 
   /**

@@ -28,19 +28,21 @@ final case class Hovered[A]
   * tooltip has since closed or moved on. The tooltip stays open while the
   * pointer crosses from that line to it, and while it is over it, so that its
   * content may be scrolled or used; it closes as the pointer moves elsewhere,
-  * leaves the window, or the page moves the line beneath it, and on Escape.
-  * While it is open, the element it is for is described by it.
+  * leaves the window, or the page moves the line beneath it, and on Escape,
+  * which goes on to the page unless the focus opened the tooltip or is within
+  * it, as the page may close its own menus by it. While it is open, the element
+  * it is for is described by it.
   *
   * A touch or a pen, which has no pointer to hover, shows it by a tap, whose
   * click goes no further, as to a link the element is in; and a tap on the
-  * element again, or elsewhere, closes it. If `focusable`, each annotation
-  * takes the focus in its turn, as by Tab, at the first of its elements that
-  * holds any text, showing the tooltip for its first line, which follows the
-  * line as the page moves: Tab moves the focus on into the tooltip, if anything
-  * there takes it, and on from its last part back to the element, and so on
-  * beyond it; Shift and Tab moves from its first part back to the element; and
-  * Escape closes it, giving the focus back to the element. Hidden annotations
-  * take the focus too, but show nothing.
+  * element again, or elsewhere, closes it. The annotations that `focusing`
+  * gives take the focus, as by Tab, at the first of their elements that holds
+  * any text, showing the tooltip for its first line, which follows the line as
+  * the page moves: Tab moves the focus on into the tooltip, if anything there
+  * takes it, and on from its last part back to the element, and so on beyond
+  * it; Shift and Tab moves from its first part back to the element; and Escape
+  * closes it, giving the focus back to the element. Hidden annotations take the
+  * focus too, but show nothing.
   *
   * If `trusted`, it heeds only what the user does, not events that the page's
   * scripts make.
@@ -48,7 +50,7 @@ final case class Hovered[A]
 final class Hovering[A] private (
   val tooltip: Tooltip,
   content: (Hovered[A], Tooltip.Showing) => Option[dom.Node],
-  focusable: Boolean,
+  focusing: Focus[A],
   trusted: Boolean,
 ):
 
@@ -113,26 +115,47 @@ final class Hovering[A] private (
   window.addEventListener("resize", resized)
 
   /**
-    * Covers `decoration` too, its annotations taking the focus if `focusable`,
-    * and no longer covers those since restored.
+    * Covers `decoration` too, those of its annotations that `focusing` gives
+    * taking the focus, and no longer covers those since restored.
     */
   def add(decoration: Decoration[A]): Unit =
     covered.keys.filter(_.isRestored).toList.foreach(remove)
     if !covered.contains(decoration) then
       decoration.outermost.foreach(decorations.update(_, decoration))
-      val stops =
-        if !focusable then Nil
-        else
-          decoration
-            .annotated
-            .annotations
-            .indices
-            .toList
-            .flatMap(decoration.elements(_).find(_.textContent.trim.nonEmpty))
-            .distinct
-            .filterNot(_.hasAttribute("tabindex"))
-      stops.foreach(_.setAttribute("tabindex", "0"))
+      val stops = stopsOf(decoration)
+      stops
+        .zipWithIndex
+        .foreach((stop, index) =>
+          stop.setAttribute(
+            "tabindex",
+            if focusing.roves && index > 0 then "-1" else "0",
+          ),
+        )
       covered.update(decoration, stops)
+
+  /**
+    * The elements of `decoration` that take the focus: of each annotation that
+    * `focusing` gives, the first of its elements that holds any text, but those
+    * that take it already, or are within what does, as a link.
+    */
+  private def stopsOf(decoration: Decoration[A]): List[dom.Element] = decoration
+    .annotated
+    .annotations
+    .zipWithIndex
+    .toList
+    .collect {
+      case (annotation, index) if focusing.takes(annotation.value) => index
+    }
+    .flatMap(decoration.elements(_).find(_.textContent.trim.nonEmpty))
+    .distinct
+    .filterNot(stop => stop.hasAttribute("tabindex") || nested(stop))
+
+  /** Whether `element` is within what takes the focus itself, as a link. */
+  private def nested(element: dom.Element): Boolean = Option(element.parentNode)
+    .filter(_.nodeType == Passage.elementNode)
+    .exists(parent =>
+      parent.asInstanceOf[dom.Element].closest(Tooltip.focusable) != null,
+    )
 
   /**
     * No longer covers `decoration`, whose annotations no longer take the focus,
@@ -321,13 +344,48 @@ final class Hovering[A] private (
 
   private def key(event: dom.KeyboardEvent): Unit = event.key match
     case "Escape" => shown.foreach(shown =>
-        event.stopPropagation()
+        if focused || active.exists(within) then event.stopPropagation()
         if active.exists(within) && shown.element.isConnected then
           giveBack(shown.element)
         hide(),
       )
-    case "Tab" => shown.foreach(shown => tab(event, shown.element))
-    case _     => ()
+    case "Tab"        => shown.foreach(shown => tab(event, shown.element))
+    case "ArrowRight" => rove(event, 1)
+    case "ArrowLeft"  => rove(event, -1)
+    case _            => ()
+
+  /**
+    * Moves the focus `step` annotations to the right, among those of the
+    * decoration whose annotation has it, if `focusing` roves and there is one
+    * there, making it the decoration's stop of Tab. In text that runs from
+    * right to left, as Arabic or Hebrew, the next annotation is to the left.
+    */
+  private def rove(event: dom.KeyboardEvent, step: Int): Unit =
+    if focusing.roves then
+      for
+        from  <- active
+        stops <- covered.values.find(_.exists(_ eq from))
+        to    <- stops.lift(
+          stops.indexWhere(_ eq from) + (if leftward(from) then -step else step),
+        )
+      do
+        event.preventDefault()
+        from.setAttribute("tabindex", "-1")
+        to.setAttribute("tabindex", "0")
+        to.asInstanceOf[dom.HTMLElement].focus()
+
+  /**
+    * Whether the text of `element` runs from right to left, as its style has
+    * it, or else the `dir` of the nearest element that has one.
+    */
+  private def leftward(element: dom.Element): Boolean =
+    val style = document
+      .asInstanceOf[dom.HTMLDocument]
+      .defaultView
+      .getComputedStyle(element)
+    style.direction == "rtl" || Option(
+      element.closest("[dir]"),
+    ).exists(_.getAttribute("dir").toLowerCase == "rtl")
 
   /**
     * Moves the focus by Tab from `element` into the tooltip, and from its first
@@ -478,15 +536,15 @@ object Hovering:
 
   /**
     * Shows `tooltip` with what `content` gives for the annotations under the
-    * pointer, or tapped, or, if `focusable`, given the focus, of the
-    * decorations added to it, until it is stopped, heeding only the user's
+    * pointer, or tapped, or given the focus, as `focus` has them take it, of
+    * the decorations added to it, until it is stopped, heeding only the user's
     * events if `trusted`.
     */
   def apply[A]
     (
       tooltip: Tooltip,
       content: (Hovered[A], Tooltip.Showing) => Option[dom.Node],
-      focusable: Boolean = false,
+      focus: Focus[A] = Focus.Off,
       trusted: Boolean = false,
     )
-    : Hovering[A] = new Hovering(tooltip, content, focusable, trusted)
+    : Hovering[A] = new Hovering(tooltip, content, focus, trusted)

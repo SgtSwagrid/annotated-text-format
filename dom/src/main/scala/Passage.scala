@@ -78,7 +78,9 @@ final class Passage private (
         last(node).flatMap(text => offsetOf(text, text.data.length))
       else
         atoms
-          .collectFirst { case (atom, span) if atom eq nodes(offset) => span.start }
+          .collectFirst {
+            case (atom, span) if atom eq nodes(offset) => span.start
+          }
           .orElse(first(nodes(offset)).flatMap(offsetOf(_, 0)))
 
   /**

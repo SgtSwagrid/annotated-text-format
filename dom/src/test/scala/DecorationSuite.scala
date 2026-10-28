@@ -703,10 +703,7 @@ class DecorationSuite extends FunSuite:
       )
       .toOption
       .get
-    assertEquals(
-      splits,
-      List("She " -> " is late."),
-    )
+    assertEquals(splits, List("She " -> " is late."))
 
   test("The classes that a look gives are on its elements while shown"):
     val paragraph = Jsdom.element("<p>She always is late.</p>")
@@ -861,14 +858,20 @@ class DecorationSuite extends FunSuite:
   test("Placed whole, one left out only for another left out is put back"):
     val paragraph = Jsdom.element("<p>Ich stehe auf.<input><input></p>")
     val document  = paragraph.ownerDocument
-    paragraph.insertBefore(document.createTextNode(""), paragraph.lastChild)
+    paragraph.insertBefore(
+      document.createTextNode(""),
+      paragraph.lastChild,
+    )
     val passage    = Passage(paragraph)
     val decoration = Decorator
       .decorate(
         passage,
         passage
           .annotate(List(
-            Annotation(List(Span(4, 9), Span.point(15)), List("stand", "x")),
+            Annotation(
+              List(Span(4, 9), Span.point(15)),
+              List("stand", "x"),
+            ),
             Annotation(List(Span(6, 12)), List("geht")),
           ))
           .toOption
@@ -881,6 +884,11 @@ class DecorationSuite extends FunSuite:
     assertEquals(decoration.unplaced, Set(0))
     assertEquals(texts(paragraph), List("geht"))
 
-  test("An offset at an element's child that is not prose is where that child is"):
+  test(
+    "An offset at an element's child that is not prose is where that child is",
+  ):
     val paragraph = Jsdom.element("<p>Ich <input> auf</p>")
-    assertEquals(Passage(paragraph).offsetOf(paragraph, 1), Some(4))
+    assertEquals(
+      Passage(paragraph).offsetOf(paragraph, 1),
+      Some(4),
+    )

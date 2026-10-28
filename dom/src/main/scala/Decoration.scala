@@ -35,10 +35,10 @@ object Decorator:
     *
     * Once the page is decorated, it tells `split` of each text node of the page
     * that it split, with the node split off it, if that is still in the page,
-    * not wrapped or replaced by an element of its own, as an application marking the
-    * page's nodes may copy its mark; a `split` that throws is passed over. As
-    * the decoration is restored, each node split off is joined back into the
-    * node it came from, and taken out of the page.
+    * not wrapped or replaced by an element of its own, as an application
+    * marking the page's nodes may copy its mark; a `split` that throws is
+    * passed over. As the decoration is restored, each node split off is joined
+    * back into the node it came from, and taken out of the page.
     *
     * Decorations of one page may be restored in any order.
     */
@@ -362,8 +362,8 @@ private object Decoration:
   /**
     * The pieces of `annotated`, leaving out the annotations `broken`, and then,
     * one at a time, the last that they do not draw whole, until all left are;
-    * and then putting back each left out that would be drawn whole, as one
-    * may have been only for another since left out; and those left out.
+    * and then putting back each left out that would be drawn whole, as one may
+    * have been only for another since left out; and those left out.
     */
   private def settle[A]
     (
@@ -389,16 +389,17 @@ private object Decoration:
             if !skipped(index) &&
             !drawn(pieces, annotation, index, look, passage) => index
         }
-    @tailrec def narrow(skipped: Set[Int]): Set[Int] =
-      partial(skipped).lastOption match
-        case Some(index) => narrow(skipped + index)
-        case None        => skipped
-    @tailrec def widen(skipped: Set[Int]): Set[Int] = (skipped -- broken)
+    @tailrec
+    def narrow(skipped: Set[Int]): Set[Int] = partial(skipped).lastOption match
+      case Some(index) => narrow(skipped + index)
+      case None        => skipped
+    @tailrec
+    def widen(skipped: Set[Int]): Set[Int] = (skipped -- broken)
       .toList
       .sorted
       .find(index => partial(skipped - index).isEmpty) match
-      case Some(index) => widen(skipped - index)
-      case None        => skipped
+        case Some(index) => widen(skipped - index)
+        case None        => skipped
     val skipped = widen(narrow(broken))
     (plan(skipped), skipped)
 

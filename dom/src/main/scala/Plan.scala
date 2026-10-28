@@ -163,7 +163,13 @@ private[dom] object Plan:
       )
     marks.map(mark => mark.copy(lane = lanes(mark.annotation)))
 
-  /** A gap for the space beside each emptied span, unless something wraps it. */
+  /**
+    * A gap for a space beside each emptied span, as [[Spacing.besides]] wants
+    * them, of those that nothing wraps and no other emptied span has taken, so
+    * that two emptied side by side take a space each. They are taken from the
+    * last span back, as the last may have only the space before it, which the
+    * one before it would otherwise take as the space after it.
+    */
   private def gaps[A]
     (
       text: String,
@@ -171,21 +177,37 @@ private[dom] object Plan:
       wraps: List[Piece.Wrap[A]],
     )
     : List[Piece.Wrap[A]] = replaced
-    .collect {
-      case (span, replacement) if replacement.text.isEmpty =>
-        Spacing
-          .beside(text, span)
-          .map(space =>
-            new Piece.Wrap(
-              space,
-              Nil,
-              Some(replacement.copy(text = "")),
-            ),
-          )
-    }
-    .flatten
-    .filterNot(gap => wraps.exists(_.span.overlaps(gap.span)))
-    .distinctBy(_.span)
+    .filter((_, replacement) => replacement.text.isEmpty)
+    .sortBy((span, _) => -span.start)
+    .foldLeft(List.empty[Piece.Wrap[A]])((taken, emptied) =>
+      gap(text, emptied, wraps, taken).fold(taken)(_ :: taken),
+    )
+
+  /**
+    * The gap for the first space beside `emptied` that nothing of `wraps`
+    * wraps, and that none of `taken` has, if any.
+    */
+  private def gap[A]
+    (
+      text: String,
+      emptied: (Span, Replacement),
+      wraps: List[Piece.Wrap[A]],
+      taken: List[Piece.Wrap[A]],
+    )
+    : Option[Piece.Wrap[A]] =
+    val (span, replacement) = emptied
+    Spacing
+      .besides(text, span)
+      .find(space =>
+        !wraps.exists(_.span.overlaps(space)) && !taken.exists(_.span == space),
+      )
+      .map(space =>
+        new Piece.Wrap(
+          space,
+          Nil,
+          Some(replacement.copy(text = "")),
+        ),
+      )
 
   /**
     * `wrap`, in a piece for each of `texts` that it lies across, its

@@ -144,6 +144,28 @@ class DecorationSuite extends FunSuite:
       "I really like it.",
     )
 
+  test(
+    "Two words emptied side by side take a space each, the last the one before it if it has no other",
+  ):
+    val paragraph  = Jsdom.element("<p>what I have seen.</p>")
+    val decoration = decorate(
+      paragraph,
+      translated,
+      Annotation(Span(7, 11), List("")),
+      Annotation(Span(12, 16), List("")),
+    )
+    assertEquals(paragraph.textContent, "what I.")
+    decoration.hide(0)
+    assertEquals(paragraph.textContent, "what I have.")
+    decoration.show(0)
+    decoration.hide(1)
+    assertEquals(paragraph.textContent, "what I seen.")
+    decoration.restore()
+    assertEquals(
+      paragraph.innerHTML,
+      "what I have seen.",
+    )
+
   test("A point with nothing put in is an empty marker"):
     val paragraph  = Jsdom.element("<p>She always is late.</p>")
     val decoration = decorate(

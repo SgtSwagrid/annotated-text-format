@@ -11,27 +11,33 @@
   
 </div>
 
+> [!WARNING]
+> Annotated Text Format is still a prototype. Anything could be broken or change between minor versions.
+
 ## ⬇️ Installation
 
-_Annotated Text Format_ comes in three parts, each an artefact of its own:
+There are several components which can be installed separately, but the same version number (e.g. [latest](../../releases/latest)) must be used across all of them.
+The following applies for [Scala 3](https://www.scala-lang.org/) projects built with [sbt 2](https://www.scala-sbt.org/).
+Add the desired components to your `build.sbt` file:
 
-| Artefact | What it holds |
+```scala
+// Core (required)
+libraryDependencies += "com.alecdorrington" %% "annotated-text-format" % "{version}"
+
+// Interface to large language models
+libraryDependencies += "com.alecdorrington" %% "annotated-text-format-llm" % "{version}"
+
+// Rendering in a web page
+libraryDependencies += "com.alecdorrington" %% "annotated-text-format-dom" % "{version}"
+```
+
+## 📦 Components
+
+| Component | What it holds |
 | -------- | ------------- |
 | `annotated-text-format` | The format itself: `AnnotatedText[A]`, a text with annotations, each attaching a value of type `A` to one or more of its spans; their validation, circe codecs and JSON Schema. |
 | `annotated-text-format-llm` | The interface to large language models: annotations quoted as a model writes them, the schema of its reply, which tells it how to quote, and anchoring its quotes to the text. |
 | `annotated-text-format-dom` | Rendering in a page: annotations highlighted in the page's own text, shown and hidden, and taken out again, leaving the page as it was; and a tooltip for them, opened by the pointer, a tap or the keyboard. |
-
-Add whichever you need to your `build.sbt`:
-
-```scala
-libraryDependencies += "com.alecdorrington" %% "annotated-text-format"     % "0.1.0"
-libraryDependencies += "com.alecdorrington" %% "annotated-text-format-llm" % "0.1.0"
-libraryDependencies += "com.alecdorrington" %% "annotated-text-format-dom" % "0.1.0"
-```
-
-Compiled with Scala `3.9.0`. The format and the interface to models are for the JVM and, through
-[Scala.js](https://www.scala-js.org/), for JavaScript, where sbt 2 resolves `%%` to the right artefact (sbt 1 needs
-`%%%`); rendering is for JavaScript alone.
 
 ## 👁️ See also
 

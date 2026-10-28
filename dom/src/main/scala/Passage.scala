@@ -68,15 +68,18 @@ final class Passage private (
     if node.nodeType == Passage.textNode then
       texts
         .collectFirst {
-          case (text, span)
-            if (text eq node) && text.data.length == span.end - span.start =>
+          case (text, span) if (text eq node) && unchanged(text) =>
             span.start + offset.max(0).min(text.data.length)
         }
         .orElse(inAtom(node.asInstanceOf[dom.Text], offset))
     else
       val nodes = node.childNodes
-      if offset < nodes.length then first(nodes(offset)).flatMap(offsetOf(_, 0))
-      else last(node).flatMap(text => offsetOf(text, text.data.length))
+      if offset >= nodes.length then
+        last(node).flatMap(text => offsetOf(text, text.data.length))
+      else
+        atoms
+          .collectFirst { case (atom, span) if atom eq nodes(offset) => span.start }
+          .orElse(first(nodes(offset)).flatMap(offsetOf(_, 0)))
 
   /**
     * The span in its text of `range`, as of what the reader selects, if both
@@ -102,7 +105,7 @@ final class Passage private (
         at(span.start, after = false).orElse(at(span.start, after = true))
       (endNode, end) <-
         at(span.end, after = true).orElse(at(span.end, after = false))
-      if start <= startNode.data.length && end <= endNode.data.length
+      if unchanged(startNode) && unchanged(endNode)
     yield
       val range = document.createRange()
       range.setStart(startNode, start)
@@ -128,6 +131,14 @@ final class Passage private (
             span.end,
           )
     }
+
+  /**
+    * Whether `text`, one of its text nodes, holds what it held when it was
+    * read, as one that a decoration has since split does not.
+    */
+  private def unchanged(text: dom.Text): Boolean = texts.exists((node, span) =>
+    (node eq text) && text.data.length == span.end - span.start,
+  )
 
   /** The first of its text nodes within or after `node`, in order. */
   private def first(node: dom.Node): Option[dom.Text] = texts

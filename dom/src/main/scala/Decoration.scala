@@ -34,7 +34,8 @@ object Decorator:
     * another already does; the rest are its `unplaced`.
     *
     * Once the page is decorated, it tells `split` of each text node of the page
-    * that it split, with the node split off it, as an application marking the
+    * that it split, with the node split off it, if that is still in the page,
+    * not wrapped or replaced by an element of its own, as an application marking the
     * page's nodes may copy its mark; a `split` that throws is passed over. As
     * the decoration is restored, each node split off is joined back into the
     * node it came from, and taken out of the page.
@@ -359,42 +360,47 @@ private object Decoration:
         .exists((_, text) => text.start < span.end && span.start < text.end)
 
   /**
-    * The pieces of `annotated`, leaving out the annotations `skipped`, and then
-    * each that they do not draw whole, until all left are drawn whole; and
-    * those left out.
+    * The pieces of `annotated`, leaving out the annotations `broken`, and then,
+    * one at a time, the last that they do not draw whole, until all left are;
+    * and then putting back each left out that would be drawn whole, as one
+    * may have been only for another since left out; and those left out.
     */
-  @tailrec
   private def settle[A]
     (
       annotated: AnnotatedText[A],
       look: Look[A],
       passage: Passage,
-      skipped: Set[Int],
+      broken: Set[Int],
     )
     : (List[Piece[A]], Set[Int]) =
-    val pieces = Plan.of(
+    def plan(skipped: Set[Int]): List[Piece[A]] = Plan.of(
       annotated,
       look,
       passage.texts.map(_._2).toList,
       skipped,
     )
-    val partial = annotated
-      .annotations
-      .zipWithIndex
-      .collect {
-        case (annotation, index)
-          if !skipped(index) &&
-          !drawn(pieces, annotation, index, look, passage) => index
-      }
-      .toSet
-    if partial.isEmpty then (pieces, skipped)
-    else
-      settle(
-        annotated,
-        look,
-        passage,
-        skipped ++ partial,
-      )
+    def partial(skipped: Set[Int]): List[Int] =
+      val pieces = plan(skipped)
+      annotated
+        .annotations
+        .zipWithIndex
+        .collect {
+          case (annotation, index)
+            if !skipped(index) &&
+            !drawn(pieces, annotation, index, look, passage) => index
+        }
+    @tailrec def narrow(skipped: Set[Int]): Set[Int] =
+      partial(skipped).lastOption match
+        case Some(index) => narrow(skipped + index)
+        case None        => skipped
+    @tailrec def widen(skipped: Set[Int]): Set[Int] = (skipped -- broken)
+      .toList
+      .sorted
+      .find(index => partial(skipped - index).isEmpty) match
+      case Some(index) => widen(skipped - index)
+      case None        => skipped
+    val skipped = widen(narrow(broken))
+    (plan(skipped), skipped)
 
   /**
     * Whether `pieces` draw `annotation`, at `index`, whole: each point put in
@@ -423,7 +429,7 @@ private object Decoration:
       else
         look.shown(annotation.value, part).isEmpty || pieces.exists:
           case Piece.Wrap(wrapped, _, Some(replacement)) =>
-            replacement.annotation == index && wrapped.start == span.start
+            replacement.annotation == index && span.covers(wrapped)
           case _ => false,
     )
 
@@ -557,10 +563,12 @@ private final case class Edits
       case insert: Piece.Insert[A] => Right(insert)
     val edits = wraps.flatMap(wrapping) ++ inserting(inserts)
     edits.sortBy(edit => (-edit.offset, edit.rank)).foreach(_.make())
-    splits.foreach((node, rest) =>
-      try splitting(node, rest)
-      catch case NonFatal(_) => (),
-    )
+    splits
+      .filter((_, rest) => rest.parentNode != null)
+      .foreach((node, rest) =>
+        try splitting(node, rest)
+        catch case NonFatal(_) => (),
+      )
     edits.flatMap(_.placed).toVector
 
   /** The edit wrapping the text of `wrap`, if it lies within one text node. */

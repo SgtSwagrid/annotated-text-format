@@ -10,9 +10,17 @@ object Spacing:
     * is one, to be taken away with it when it is emptied, so that no two spaces
     * are left together; never a line break, which may be kept as one.
     */
-  def beside(text: String, span: Span): Option[Span] =
+  def beside(text: String, span: Span): Option[Span] = besides(text, span)
+    .headOption
+
+  /**
+    * The spaces that may be taken away with `span` of `text` when it is
+    * emptied, in the order they are wanted: the one just after it, then the one
+    * just before it, of those that are spaces, but never a line break.
+    */
+  def besides(text: String, span: Span): List[Span] =
     List(span.end, span.start - 1)
-      .find(at => text.indices.contains(at) && spaces.contains(text(at)))
+      .filter(at => text.indices.contains(at) && spaces.contains(text(at)))
       .map(at => Span(at, at + 1))
 
   /**

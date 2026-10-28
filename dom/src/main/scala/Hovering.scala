@@ -355,21 +355,37 @@ final class Hovering[A] private (
     case _            => ()
 
   /**
-    * Moves the focus `step` annotations on, among those of the decoration whose
-    * annotation has it, if `focusing` roves and there is one there, making it
-    * the decoration's stop of Tab.
+    * Moves the focus `step` annotations to the right, among those of the
+    * decoration whose annotation has it, if `focusing` roves and there is one
+    * there, making it the decoration's stop of Tab. In text that runs from
+    * right to left, as Arabic or Hebrew, the next annotation is to the left.
     */
   private def rove(event: dom.KeyboardEvent, step: Int): Unit =
     if focusing.roves then
       for
         from  <- active
         stops <- covered.values.find(_.exists(_ eq from))
-        to    <- stops.lift(stops.indexWhere(_ eq from) + step)
+        to    <- stops.lift(
+          stops.indexWhere(_ eq from) + (if leftward(from) then -step else step),
+        )
       do
         event.preventDefault()
         from.setAttribute("tabindex", "-1")
         to.setAttribute("tabindex", "0")
         to.asInstanceOf[dom.HTMLElement].focus()
+
+  /**
+    * Whether the text of `element` runs from right to left, as its style has
+    * it, or else the `dir` of the nearest element that has one.
+    */
+  private def leftward(element: dom.Element): Boolean =
+    val style = document
+      .asInstanceOf[dom.HTMLDocument]
+      .defaultView
+      .getComputedStyle(element)
+    style.direction == "rtl" || Option(
+      element.closest("[dir]"),
+    ).exists(_.getAttribute("dir").toLowerCase == "rtl")
 
   /**
     * Moves the focus by Tab from `element` into the tooltip, and from its first

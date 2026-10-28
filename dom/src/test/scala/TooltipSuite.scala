@@ -592,6 +592,31 @@ class TooltipSuite extends FunSuite:
     )
 
   test(
+    "Roving in text that runs from right to left, the left arrow key moves to the next annotation",
+  ):
+    val paragraph  = Jsdom.element("""<p dir="rtl">אני קם מוקדם.</p>""")
+    val document   = paragraph.ownerDocument
+    val decoration = annotated(
+      paragraph,
+      Annotation(Span(0, 3), "I"),
+      Annotation(Span(4, 6), "get up"),
+    )
+    val hovering = Hovering[String](
+      Tooltip(document),
+      (hovered, _) => hovered.values.headOption.map(text(document, _)),
+      focus = Focus.Roving(_ => true),
+    )
+    hovering.add(decoration)
+    decoration.elements(0).head.asInstanceOf[dom.HTMLElement].focus()
+    Jsdom.press(document, "ArrowRight")
+    assert(active(document) eq decoration.elements(0).head)
+    Jsdom.press(document, "ArrowLeft")
+    assert(active(document) eq decoration.elements(1).head)
+    Jsdom.press(document, "ArrowRight")
+    assert(active(document) eq decoration.elements(0).head)
+    hovering.stop()
+
+  test(
     "Only the annotations whose values are given take the focus, and none within a link",
   ):
     val paragraph =

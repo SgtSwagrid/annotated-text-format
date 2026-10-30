@@ -1,6 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 import munit.FunSuite
 import org.scalajs.dom
 import scala.scalajs.js
@@ -44,7 +46,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(4, 10), "move"),
+      Annotation(TextSpan(4, 10), "move"),
     )
     assertEquals(
       paragraph.textContent,
@@ -68,7 +70,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span(0, 9), List("Der Apfel")),
+      Annotation(TextSpan(0, 9), List("Der Apfel")),
     )
     assertEquals(
       paragraph.textContent,
@@ -104,7 +106,7 @@ class DecorationSuite extends FunSuite:
       paragraph,
       translated,
       Annotation(
-        List(Span(2, 8), Span.point(14)),
+        List(TextSpan(2, 8), TextSpan.point(14)),
         List("stehe", "auf"),
       ),
     )
@@ -130,7 +132,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span(2, 8), List("")),
+      Annotation(TextSpan(2, 8), List("")),
     )
     assertEquals(paragraph.textContent, "I like it.")
     decoration.hide(0)
@@ -151,8 +153,8 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span(7, 11), List("")),
-      Annotation(Span(12, 16), List("")),
+      Annotation(TextSpan(7, 11), List("")),
+      Annotation(TextSpan(12, 16), List("")),
     )
     assertEquals(paragraph.textContent, "what I.")
     decoration.hide(0)
@@ -172,7 +174,7 @@ class DecorationSuite extends FunSuite:
       paragraph,
       kept,
       Annotation(
-        List(Span(4, 10), Span.point(14)),
+        List(TextSpan(4, 10), TextSpan.point(14)),
         "move",
       ),
     )
@@ -197,7 +199,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(2, 9), "big dog"),
+      Annotation(TextSpan(2, 9), "big dog"),
     )
     assertEquals(texts(paragraph), List("big", " dog"))
     assertEquals(
@@ -235,7 +237,7 @@ class DecorationSuite extends FunSuite:
     val decoration = Decorator
       .decorate(
         passage,
-        passage.annotate(List(Annotation(Span(4, 9), "run"))).toOption.get,
+        passage.annotate(List(Annotation(TextSpan(4, 9), "run"))).toOption.get,
         kept,
       )
       .toOption
@@ -254,8 +256,8 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(0, 3), "x"),
-      Annotation(Span(2, 5), "y"),
+      Annotation(TextSpan(0, 3), "x"),
+      Annotation(TextSpan(2, 5), "y"),
     )
     val pieces = paragraph.querySelectorAll(".atf")
     assertEquals(
@@ -285,8 +287,8 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span(0, 9), List("Der Apfel")),
-      Annotation(Span.point(4), List("x")),
+      Annotation(TextSpan(0, 9), List("Der Apfel")),
+      Annotation(TextSpan.point(4), List("x")),
     )
     assertEquals(
       paragraph.textContent,
@@ -303,9 +305,9 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span.point(0), List("The")),
-      Annotation(Span.point(7), List("down")),
-      Annotation(Span.point(7), List("quietly")),
+      Annotation(TextSpan.point(0), List("The")),
+      Annotation(TextSpan.point(7), List("down")),
+      Annotation(TextSpan.point(7), List("quietly")),
     )
     assertEquals(
       paragraph.textContent,
@@ -319,8 +321,8 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       translated,
-      Annotation(Span(0, 6), List("stehe")),
-      Annotation(Span(4, 12), List("früh")),
+      Annotation(TextSpan(0, 6), List("stehe")),
+      Annotation(TextSpan(4, 12), List("früh")),
     )
     assertEquals(paragraph.textContent, "stehe early")
     decoration.restore()
@@ -337,7 +339,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(0, 8), "lines"),
+      Annotation(TextSpan(0, 8), "lines"),
     )
     decoration.restore()
     decoration.restore()
@@ -348,7 +350,7 @@ class DecorationSuite extends FunSuite:
     decorate(
       paragraph,
       translated,
-      Annotation(Span.point(3), List("狗")),
+      Annotation(TextSpan.point(3), List("狗")),
     )
     assertEquals(paragraph.textContent, "我的猫狗。")
 
@@ -359,7 +361,7 @@ class DecorationSuite extends FunSuite:
       .decorate(
         passage,
         passage
-          .annotate(List(Annotation(Span.point(5), List("again"))))
+          .annotate(List(Annotation(TextSpan.point(5), List("again"))))
           .toOption
           .get,
         translated,
@@ -381,7 +383,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(0, 7), "both"),
+      Annotation(TextSpan(0, 7), "both"),
     )
     assertEquals(texts(paragraph), List("one", "two"))
     decoration.restore()
@@ -401,7 +403,7 @@ class DecorationSuite extends FunSuite:
     decorate(
       paragraph,
       shaded,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     val image = paragraph
       .querySelector(".atf")
@@ -415,7 +417,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     Jsdom.send(
       paragraph.querySelector(".atf"),
@@ -434,7 +436,7 @@ class DecorationSuite extends FunSuite:
       paragraph,
       translated,
       Annotation(
-        List(Span(2, 8), Span.point(14)),
+        List(TextSpan(2, 8), TextSpan.point(14)),
         List("stehe", "auf"),
       ),
     )
@@ -451,7 +453,7 @@ class DecorationSuite extends FunSuite:
     decorate(
       paragraph,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     decorate(
       paragraph.ownerDocument.createElement("p").asInstanceOf[dom.Element],
@@ -477,8 +479,8 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(Span(0, 3), "x"),
-      Annotation(Span(2, 5), "y"),
+      Annotation(TextSpan(0, 3), "x"),
+      Annotation(TextSpan(2, 5), "y"),
     )
     Jsdom.send(
       paragraph.querySelectorAll(".atf")(1),
@@ -507,7 +509,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       look,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     def image = paragraph
       .querySelector(".atf")
@@ -525,12 +527,12 @@ class DecorationSuite extends FunSuite:
     val first    = decorate(
       both.firstElementChild,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     val second = decorate(
       both.lastElementChild,
       kept,
-      Annotation(Span(3, 5), "is"),
+      Annotation(TextSpan(3, 5), "is"),
     )
     def sheets = document.querySelectorAll("#atf-forced-colours").length
     assertEquals(sheets, 1)
@@ -550,7 +552,7 @@ class DecorationSuite extends FunSuite:
     decorate(
       inner,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     assertEquals(
       shadow.querySelectorAll("#atf-forced-colours").length.asInstanceOf[Int],
@@ -568,7 +570,10 @@ class DecorationSuite extends FunSuite:
       Decorator
         .decorate(
           passage,
-          passage.annotate(List(Annotation(Span(7, 11), "late"))).toOption.get,
+          passage
+            .annotate(List(Annotation(TextSpan(7, 11), "late")))
+            .toOption
+            .get,
           kept,
           "my.notes",
         )
@@ -587,8 +592,8 @@ class DecorationSuite extends FunSuite:
         passage,
         passage
           .annotate(List(
-            Annotation(Span(0, 3), "she"),
-            Annotation(Span(4, 10), "is late"),
+            Annotation(TextSpan(0, 3), "she"),
+            Annotation(TextSpan(4, 10), "is late"),
           ))
           .toOption
           .get,
@@ -606,12 +611,12 @@ class DecorationSuite extends FunSuite:
     val first = decorate(
       both.firstElementChild,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     val second = decorate(
       both.lastElementChild,
       kept,
-      Annotation(Span(3, 5), "is"),
+      Annotation(TextSpan(3, 5), "is"),
     )
     def sheets = both
       .ownerDocument
@@ -634,7 +639,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       inner,
       kept,
-      Annotation(Span(7, 11), "late"),
+      Annotation(TextSpan(7, 11), "late"),
     )
     assertEquals(
       document.querySelectorAll("head #atf-forced-colours").length,
@@ -659,7 +664,7 @@ class DecorationSuite extends FunSuite:
     val first  = decorate(
       page,
       translated,
-      Annotation(List(Span(4, 9)), List("stand")),
+      Annotation(List(TextSpan(4, 9)), List("stand")),
     )
     val passage = Passage(page)
     assertEquals(
@@ -675,8 +680,8 @@ class DecorationSuite extends FunSuite:
         passage,
         passage
           .annotate(List(
-            Annotation(List(Span(23, 28)), List("stands")),
-            Annotation(List(Span(6, 12)), List("x")),
+            Annotation(List(TextSpan(23, 28)), List("stands")),
+            Annotation(List(TextSpan(6, 12)), List("x")),
           ))
           .toOption
           .get,
@@ -702,7 +707,7 @@ class DecorationSuite extends FunSuite:
       .decorate(
         passage,
         passage
-          .annotate(List(Annotation(List(Span.point(0)), List("here"))))
+          .annotate(List(Annotation(List(TextSpan.point(0)), List("here"))))
           .toOption
           .get,
         translated,
@@ -719,7 +724,10 @@ class DecorationSuite extends FunSuite:
     Decorator
       .decorate(
         passage,
-        passage.annotate(List(Annotation(List(Span(4, 10)), "x"))).toOption.get,
+        passage
+          .annotate(List(Annotation(List(TextSpan(4, 10)), "x")))
+          .toOption
+          .get,
         kept,
         split = (node, rest) => splits :+= (node.data -> rest.data),
       )
@@ -736,7 +744,7 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       look,
-      Annotation(List(Span(4, 10)), "known"),
+      Annotation(List(TextSpan(4, 10)), "known"),
     )
     val element = decoration.elements(0).head
     assert(element.classList.contains("known"))
@@ -752,12 +760,12 @@ class DecorationSuite extends FunSuite:
     val first     = decorate(
       paragraph,
       kept,
-      Annotation(List(Span(4, 10)), "x"),
+      Annotation(List(TextSpan(4, 10)), "x"),
     )
     val second = decorate(
       paragraph,
       kept,
-      Annotation(List(Span(14, 18)), "y"),
+      Annotation(List(TextSpan(14, 18)), "y"),
     )
     first.restore()
     second.restore()
@@ -774,12 +782,12 @@ class DecorationSuite extends FunSuite:
     val decoration = decorate(
       paragraph,
       kept,
-      Annotation(List(Span(4, 10)), "x"),
+      Annotation(List(TextSpan(4, 10)), "x"),
     )
-    assertEquals(stale.rangeOf(Span(14, 18)), None)
+    assertEquals(stale.rangeOf(TextSpan(14, 18)), None)
     val fresh = Passage(paragraph)
     assertEquals(
-      fresh.rangeOf(Span(14, 18)).map(_.toString()),
+      fresh.rangeOf(TextSpan(14, 18)).map(_.toString()),
       Some("late"),
     )
     assertEquals(
@@ -798,10 +806,10 @@ class DecorationSuite extends FunSuite:
         passage,
         passage
           .annotate(List(
-            Annotation(List(Span(4, 9)), List("stand")),
-            Annotation(List(Span(6, 9)), List("x")),
-            Annotation(List(Span.point(6)), List("y")),
-            Annotation(List(Span(14, 15)), List("z")),
+            Annotation(List(TextSpan(4, 9)), List("stand")),
+            Annotation(List(TextSpan(6, 9)), List("x")),
+            Annotation(List(TextSpan.point(6)), List("y")),
+            Annotation(List(TextSpan(14, 15)), List("z")),
           ))
           .toOption
           .get,
@@ -819,7 +827,10 @@ class DecorationSuite extends FunSuite:
     val decoration = Decorator
       .decorate(
         passage,
-        passage.annotate(List(Annotation(List(Span(4, 10)), "x"))).toOption.get,
+        passage
+          .annotate(List(Annotation(List(TextSpan(4, 10)), "x")))
+          .toOption
+          .get,
         kept,
         split = (_, _) => throw new RuntimeException("refused"),
       )
@@ -840,7 +851,7 @@ class DecorationSuite extends FunSuite:
         _ => Colour("teal"),
         classes = _ => List("atf-lit", "atf"),
       ),
-      Annotation(List(Span(4, 10)), "x"),
+      Annotation(List(TextSpan(4, 10)), "x"),
     )
     val element = decoration.elements(0).head
     assert(!element.classList.contains("atf-lit"))
@@ -854,10 +865,10 @@ class DecorationSuite extends FunSuite:
     decorate(
       paragraph,
       translated,
-      Annotation(List(Span(0, 9)), List("Der Apfel")),
+      Annotation(List(TextSpan(0, 9)), List("Der Apfel")),
     )
-    assertEquals(stale.rangeOf(Span(1, 3)), None)
-    assertEquals(stale.rangeOf(Span.point(0)), None)
+    assertEquals(stale.rangeOf(TextSpan(1, 3)), None)
+    assertEquals(stale.rangeOf(TextSpan.point(0)), None)
 
   test("A replacement beginning at a break between blocks is drawn whole"):
     val page       = Jsdom.element("<div><p>one</p><p>two</p></div>")
@@ -866,7 +877,7 @@ class DecorationSuite extends FunSuite:
       .decorate(
         passage,
         passage
-          .annotate(List(Annotation(List(Span(3, 7)), List("zwei"))))
+          .annotate(List(Annotation(List(TextSpan(3, 7)), List("zwei"))))
           .toOption
           .get,
         translated,
@@ -891,10 +902,10 @@ class DecorationSuite extends FunSuite:
         passage
           .annotate(List(
             Annotation(
-              List(Span(4, 9), Span.point(15)),
+              List(TextSpan(4, 9), TextSpan.point(15)),
               List("stand", "x"),
             ),
-            Annotation(List(Span(6, 12)), List("geht")),
+            Annotation(List(TextSpan(6, 12)), List("geht")),
           ))
           .toOption
           .get,

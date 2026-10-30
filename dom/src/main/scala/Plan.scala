@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Span}
+import com.alecdorrington.annotatedtextformat.{AnnotatedText, TextSpan}
 
 /** What is put in a page for an annotated text, before any of it is. */
 private[dom] enum Piece[+A]:
@@ -12,7 +12,7 @@ private[dom] enum Piece[+A]:
     */
   case Wrap
     (
-      span: Span,
+      span: TextSpan,
       marks: List[Mark[A]],
       replacement: Option[Replacement],
     )
@@ -53,7 +53,7 @@ private[dom] object Plan:
     (
       annotated: AnnotatedText[A],
       look: Look[A],
-      texts: List[Span],
+      texts: List[TextSpan],
       skipped: Set[Int] = Set.empty,
     )
     : List[Piece[A]] =
@@ -74,7 +74,7 @@ private[dom] object Plan:
       inserts(annotated.text, points, look)
 
   /** Whether `at` lies inside `span`, not at either end. */
-  private def within(at: Int, span: Span): Boolean = span.start < at &&
+  private def within(at: Int, span: TextSpan): Boolean = span.start < at &&
     at < span.end
 
   /**
@@ -87,7 +87,7 @@ private[dom] object Plan:
       look: Look[A],
       skipped: Set[Int],
     )
-    : List[(Span, Replacement)] = annotated
+    : List[(TextSpan, Replacement)] = annotated
     .annotations
     .zipWithIndex
     .filterNot((_, index) => skipped(index))
@@ -103,7 +103,7 @@ private[dom] object Plan:
         }
         .flatten,
     )
-    .foldLeft(Vector.empty[(Span, Replacement)])((kept, next) =>
+    .foldLeft(Vector.empty[(TextSpan, Replacement)])((kept, next) =>
       if kept.exists(_._1.overlaps(next._1)) then kept else kept :+ next,
     )
     .toList
@@ -115,7 +115,7 @@ private[dom] object Plan:
   private def wrapped[A]
     (
       segments: List[Segment[A]],
-      replaced: List[(Span, Replacement)],
+      replaced: List[(TextSpan, Replacement)],
     )
     : List[Piece.Wrap[A]] =
     val stretches = segments.filterNot(_.span.isPoint)
@@ -131,7 +131,7 @@ private[dom] object Plan:
     */
   private def together[A]
     (stretches: List[Segment[A]])
-    (span: Span, replacement: Replacement)
+    (span: TextSpan, replacement: Replacement)
     : Piece.Wrap[A] = new Piece.Wrap(
     span,
     apart(
@@ -173,7 +173,7 @@ private[dom] object Plan:
   private def gaps[A]
     (
       text: String,
-      replaced: List[(Span, Replacement)],
+      replaced: List[(TextSpan, Replacement)],
       wraps: List[Piece.Wrap[A]],
     )
     : List[Piece.Wrap[A]] = replaced
@@ -190,7 +190,7 @@ private[dom] object Plan:
   private def gap[A]
     (
       text: String,
-      emptied: (Span, Replacement),
+      emptied: (TextSpan, Replacement),
       wraps: List[Piece.Wrap[A]],
       taken: List[Piece.Wrap[A]],
     )
@@ -213,23 +213,27 @@ private[dom] object Plan:
     * `wrap`, in a piece for each of `texts` that it lies across, its
     * replacement shown in the first, and none in the rest.
     */
-  private def cut[A](wrap: Piece.Wrap[A], texts: List[Span]): List[Piece[A]] =
-    texts
-      .flatMap(intersection(wrap.span, _))
-      .zipWithIndex
-      .map((span, index) =>
-        wrap.copy(
-          span = span,
-          replacement = wrap
-            .replacement
-            .map(replacement =>
-              if index == 0 then replacement else replacement.copy(text = ""),
-            ),
-        ),
-      )
+  private def cut[A]
+    (
+      wrap: Piece.Wrap[A],
+      texts: List[TextSpan],
+    )
+    : List[Piece[A]] = texts
+    .flatMap(intersection(wrap.span, _))
+    .zipWithIndex
+    .map((span, index) =>
+      wrap.copy(
+        span = span,
+        replacement = wrap
+          .replacement
+          .map(replacement =>
+            if index == 0 then replacement else replacement.copy(text = ""),
+          ),
+      ),
+    )
 
-  private def intersection(one: Span, two: Span): Option[Span] =
-    val span = Span(
+  private def intersection(one: TextSpan, two: TextSpan): Option[TextSpan] =
+    val span = TextSpan(
       one.start.max(two.start),
       one.end.min(two.end),
     )

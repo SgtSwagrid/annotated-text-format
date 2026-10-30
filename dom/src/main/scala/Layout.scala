@@ -1,6 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 
 /**
   * A part of an annotation lying over a [[Segment]]: the annotation, by its
@@ -20,7 +22,7 @@ final case class Mark[+A]
   * annotations lie, as `marks`; or a point, at which the parts that are points
   * stand.
   */
-final case class Segment[+A](span: Span, marks: List[Mark[A]])
+final case class Segment[+A](span: TextSpan, marks: List[Mark[A]])
 
 /** How an annotated text is laid out to be drawn. */
 object Layout:
@@ -37,7 +39,9 @@ object Layout:
     )
 
   /** Each part of each annotation of `annotated`, with its mark. */
-  private def marked[A](annotated: AnnotatedText[A]): List[(Span, Mark[A])] =
+  private def marked[A]
+    (annotated: AnnotatedText[A])
+    : List[(TextSpan, Mark[A])] =
     val laned = lanes(annotated.annotations)
     annotated
       .annotations
@@ -56,16 +60,13 @@ object Layout:
           ),
       )
 
-  private def points[A](marks: List[(Span, Mark[A])]): List[Segment[A]] = marks
-    .filter(_._1.isPoint)
-    .groupMap(_._1)(_._2)
-    .toList
-    .map(Segment(_, _))
+  private def points[A](marks: List[(TextSpan, Mark[A])]): List[Segment[A]] =
+    marks.filter(_._1.isPoint).groupMap(_._1)(_._2).toList.map(Segment(_, _))
 
   private def stretches[A]
     (
       text: String,
-      marks: List[(Span, Mark[A])],
+      marks: List[(TextSpan, Mark[A])],
     )
     : List[Segment[A]] =
     val bounds =
@@ -73,16 +74,20 @@ object Layout:
         marks.flatMap((span, _) => List(span.start, span.end))).distinct.sorted
     bounds
       .zip(bounds.drop(1))
-      .map((start, end) => over(Span(start, end), marks))
+      .map((start, end) => over(TextSpan(start, end), marks))
 
   /** The segment of `span`, with the marks of the parts that cover it. */
-  private def over[A](span: Span, marks: List[(Span, Mark[A])]): Segment[A] =
-    Segment(
-      span,
-      marks.collect {
-        case (part, mark) if !part.isPoint && part.covers(span) => mark
-      },
+  private def over[A]
+    (
+      span: TextSpan,
+      marks: List[(TextSpan, Mark[A])],
     )
+    : Segment[A] = Segment(
+    span,
+    marks.collect {
+      case (part, mark) if !part.isPoint && part.covers(span) => mark
+    },
+  )
 
   /**
     * The lane of each annotation of `annotations`, by its index: `0` at the

@@ -1,7 +1,7 @@
 package com.alecdorrington.annotatedtextformat.dom
 
 import com.alecdorrington.annotatedtextformat.{
-  AnnotatedText, Annotation, Problem, Span,
+  AnnotatedText, Annotation, Problem, TextSpan,
 }
 import org.scalajs.dom
 
@@ -38,20 +38,20 @@ final class Passage private (
   private val starts = parts.scanLeft(0)(_ + _.text.length)
 
   /** Its text nodes, each with its span in [[text]]. */
-  private[dom] val texts: Vector[(dom.Text, Span)] = parts
+  private[dom] val texts: Vector[(dom.Text, TextSpan)] = parts
     .zip(starts)
     .collect { case (Passage.Part.Prose(node), start) =>
-      node -> Span(start, start + node.data.length)
+      node -> TextSpan(start, start + node.data.length)
     }
 
   /**
     * The spans in [[text]] of its elements that are not prose, those of
     * decorations among them, within which nothing is annotated.
     */
-  private[dom] val atoms: Vector[(dom.Element, Span)] = parts
+  private[dom] val atoms: Vector[(dom.Element, TextSpan)] = parts
     .zip(starts)
     .collect { case (part @ Passage.Part.Atom(element), start) =>
-      element -> Span(start, start + part.text.length)
+      element -> TextSpan(start, start + part.text.length)
     }
 
   /**
@@ -87,21 +87,21 @@ final class Passage private (
     * The span in its text of `range`, as of what the reader selects, if both
     * its ends are at its text nodes.
     */
-  def spanOf(range: dom.Range): Option[Span] =
+  def spanOf(range: dom.Range): Option[TextSpan] =
     for
       start <- offsetOf(
         range.startContainer,
         range.startOffset,
       )
       end <- offsetOf(range.endContainer, range.endOffset) if start <= end
-    yield Span(start, end)
+    yield TextSpan(start, end)
 
   /**
     * A range of the page over `span` of its text, if both its ends are at its
     * text nodes: the start at the start of the text after it, and the end at
     * the end of the text before it, or at either, at a point.
     */
-  def rangeOf(span: Span): Option[dom.Range] =
+  def rangeOf(span: TextSpan): Option[dom.Range] =
     for
       (startNode, start) <-
         at(span.start, after = false).orElse(at(span.start, after = true))
@@ -170,7 +170,7 @@ final class Passage private (
     * The text node that `span` lies within, if it lies within one, with where
     * it begins and ends in it.
     */
-  private[dom] def within(span: Span): Option[(dom.Text, Int, Int)] = texts
+  private[dom] def within(span: TextSpan): Option[(dom.Text, Int, Int)] = texts
     .collectFirst {
       case (node, whole) if whole.covers(span) && !whole.isPoint =>
         (node, span.start - whole.start, span.end - whole.start)
@@ -187,7 +187,13 @@ final class Passage private (
     }
 
   /** Whether `offset` is in `span`, at its end if `after`, or else its start. */
-  private def holds(span: Span, offset: Int, after: Boolean): Boolean =
+  private def holds
+    (
+      span: TextSpan,
+      offset: Int,
+      after: Boolean,
+    )
+    : Boolean =
     if after then span.start < offset && offset <= span.end
     else span.start <= offset && offset < span.end
 

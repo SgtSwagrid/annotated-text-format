@@ -16,7 +16,7 @@ import io.circe.{Decoder, Encoder, Json}
   * @note
   *   The JVM's strings and the DOM's ranges count alike.
   */
-final case class Span(start: Int, end: Int):
+final case class TextSpan(start: Int, end: Int):
 
   /** The number of characters within it. */
   def length: Int = end - start
@@ -31,39 +31,40 @@ final case class Span(start: Int, end: Int):
   def contains(at: Int): Boolean = start <= at && at < end
 
   /** Whether `other` lies within it, as a point at either of its ends does. */
-  def covers(other: Span): Boolean = start <= other.start && other.end <= end
+  def covers(other: TextSpan): Boolean = start <= other.start &&
+    other.end <= end
 
   /** Whether it shares a character with `other`, which a point never does. */
-  def overlaps(other: Span): Boolean = !isPoint && !other.isPoint &&
+  def overlaps(other: TextSpan): Boolean = !isPoint && !other.isPoint &&
     start < other.end && other.start < end
 
   /** How many characters lie between it and `other`. */
-  def distance(other: Span): Int = (other.start - end)
+  def distance(other: TextSpan): Int = (other.start - end)
     .max(start - other.end)
     .max(0)
 
   /** It, moved `by` characters on. */
-  def shift(by: Int): Span = Span(start + by, end + by)
+  def shift(by: Int): TextSpan = TextSpan(start + by, end + by)
 
   /** Whether it lies within a text of `length` characters, the right way round. */
   def fits(length: Int): Boolean = 0 <= start && start <= end && end <= length
 
-object Span:
+object TextSpan:
 
   /** The point at `at`. */
-  def point(at: Int): Span = Span(at, at)
+  def point(at: Int): TextSpan = TextSpan(at, at)
 
   /** Spans in the order in which they begin, the shorter first. */
-  given Ordering[Span] = Ordering.by(span => (span.start, span.end))
+  given Ordering[TextSpan] = Ordering.by(span => (span.start, span.end))
 
   /** A span as `{"start": 4, "end": 9}`. */
-  given Encoder[Span] =
+  given Encoder[TextSpan] =
     Encoder.forProduct2("start", "end")(span => (span.start, span.end))
 
-  given Decoder[Span] = Decoder.forProduct2("start", "end")(Span.apply)
+  given Decoder[TextSpan] = Decoder.forProduct2("start", "end")(TextSpan.apply)
 
   /** Its Scaladoc, which describes its schema. */
-  private val doc = Scaladoc.of[Span].map(_.plain)
+  private val doc = Scaladoc.of[TextSpan].map(_.plain)
 
   /** The JSON Schema of a span, described by its Scaladoc. */
   val schema: Json = JsonSchema.described(

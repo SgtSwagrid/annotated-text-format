@@ -1,6 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 import org.scalajs.dom
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -346,7 +348,7 @@ private object Decoration:
     }
     .toSet
 
-  private def fits(passage: Passage)(span: Span): Boolean =
+  private def fits(passage: Passage)(span: TextSpan): Boolean =
     if span.isPoint then
       passage
         .texts

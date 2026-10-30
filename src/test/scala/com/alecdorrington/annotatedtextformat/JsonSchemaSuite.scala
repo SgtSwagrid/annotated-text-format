@@ -91,7 +91,7 @@ class JsonSchemaSuite extends FunSuite:
     )
 
   test("Schemas are described by the Scaladoc of what they describe"):
-    val span = Span.schema.hcursor
+    val span = TextSpan.schema.hcursor
     assert(
       span.get[String]("description").exists(_.startsWith("A part of a text")),
     )

@@ -1,12 +1,14 @@
 package com.alecdorrington.annotatedtextformat.llm
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 import munit.FunSuite
 
 class AnchoringSuite extends FunSuite:
 
   /** The spans at which each of `quotes` is found in `text`, in order. */
-  private def spans(text: String, quotes: String*): List[List[Span]] =
+  private def spans(text: String, quotes: String*): List[List[TextSpan]] =
     anchored(text, quotes*).annotated.annotations.map(_.spans)
 
   private def anchored(text: String, quotes: String*): Anchored[Int] =
@@ -36,11 +38,17 @@ class AnchoringSuite extends FunSuite:
   ):
     assertEquals(
       spans("the cat and the dog", "the", "the"),
-      List(List(Span(0, 3)), List(Span(12, 15))),
+      List(
+        List(TextSpan(0, 3)),
+        List(TextSpan(12, 15)),
+      ),
     )
     assertEquals(
       spans("the big dog", "the big dog", "big"),
-      List(List(Span(0, 11)), List(Span(4, 7))),
+      List(
+        List(TextSpan(0, 11)),
+        List(TextSpan(4, 7)),
+      ),
     )
     assertEquals(
       spans(
@@ -48,11 +56,17 @@ class AnchoringSuite extends FunSuite:
         "The cat sat.",
         "The",
       ),
-      List(List(Span(0, 12)), List(Span(0, 3))),
+      List(
+        List(TextSpan(0, 12)),
+        List(TextSpan(0, 3)),
+      ),
     )
     assertEquals(
       spans("a dog", "dog", "dog"),
-      List(List(Span(2, 5)), List(Span(2, 5))),
+      List(
+        List(TextSpan(2, 5)),
+        List(TextSpan(2, 5)),
+      ),
     )
 
   test(
@@ -60,7 +74,10 @@ class AnchoringSuite extends FunSuite:
   ):
     assertEquals(
       spans("She is late.", "late", "She"),
-      List(List(Span(7, 11)), List(Span(0, 3))),
+      List(
+        List(TextSpan(7, 11)),
+        List(TextSpan(0, 3)),
+      ),
     )
     assertEquals(
       spans(
@@ -70,9 +87,9 @@ class AnchoringSuite extends FunSuite:
         "cat",
       ),
       List(
-        List(Span(24, 27)),
-        List(Span(6, 9)),
-        List(Span(35, 38)),
+        List(TextSpan(24, 27)),
+        List(TextSpan(6, 9)),
+        List(TextSpan(35, 38)),
       ),
     )
 
@@ -96,16 +113,16 @@ class AnchoringSuite extends FunSuite:
   ):
     assertEquals(
       spans("This is is wrong.", "is is"),
-      List(List(Span(5, 10))),
+      List(List(TextSpan(5, 10))),
     )
     assertEquals(
       spans("Breathe the the air", "the the"),
-      List(List(Span(8, 15))),
+      List(List(TextSpan(8, 15))),
     )
     assertEquals(parts("concatenate", "con cat"), Nil)
     assertEquals(
       spans("concatenate the cat", "cat"),
-      List(List(Span(16, 19))),
+      List(List(TextSpan(16, 19))),
     )
     assertEquals(spans("l'eau", "eau"), Nil)
     assertEquals(
@@ -118,7 +135,7 @@ class AnchoringSuite extends FunSuite:
         .annotated
         .annotations
         .map(_.spans),
-      List(List(Span(3, 6))),
+      List(List(TextSpan(3, 6))),
     )
     assertEquals(parts("我的猫很可爱", "猫"), List(List("猫")))
     assertEquals(
@@ -142,7 +159,7 @@ class AnchoringSuite extends FunSuite:
         "She always is late.",
         "always … is ‸late",
       ),
-      List(List(Span(4, 10), Span.point(14))),
+      List(List(TextSpan(4, 10), TextSpan.point(14))),
     )
     assertEquals(
       parts("Wait ... what?", "Wait ... what"),
@@ -162,7 +179,7 @@ class AnchoringSuite extends FunSuite:
     ).foreach((text, quote, point) =>
       assertEquals(
         spans(text, quote),
-        List(List(Span.point(point))),
+        List(List(TextSpan.point(point))),
         quote,
       ),
     )
@@ -172,7 +189,7 @@ class AnchoringSuite extends FunSuite:
   ):
     assertEquals(
       spans("the cat and the dog", "and ⟦the⟧ dog"),
-      List(List(Span(12, 15))),
+      List(List(TextSpan(12, 15))),
     )
     assertEquals(
       parts("a ⟧b", "a ⟧b"),
@@ -188,7 +205,10 @@ class AnchoringSuite extends FunSuite:
         "big",
         "the big ⟦dog⟧",
       ),
-      List(List(Span(4, 7)), List(Span(8, 11))),
+      List(
+        List(TextSpan(4, 7)),
+        List(TextSpan(8, 11)),
+      ),
     )
     assertEquals(
       spans(
@@ -196,14 +216,17 @@ class AnchoringSuite extends FunSuite:
         "late",
         "is ‸late",
       ),
-      List(List(Span(7, 11)), List(Span.point(7))),
+      List(
+        List(TextSpan(7, 11)),
+        List(TextSpan.point(7)),
+      ),
     )
     assertEquals(
       spans(
         "She always is late, and she always is late.",
         "she ⟦always⟧ is … is ‸late.",
       ),
-      List(List(Span(28, 34), Span.point(38))),
+      List(List(TextSpan(28, 34), TextSpan.point(38))),
     )
 
   test(
@@ -229,7 +252,7 @@ class AnchoringSuite extends FunSuite:
     )
     assertEquals(
       result.annotated.annotations,
-      List(Annotation(Span(7, 11), 2)),
+      List(Annotation(TextSpan(7, 11), 2)),
     )
     assert(!result.complete)
     assertEquals(
@@ -244,10 +267,13 @@ class AnchoringSuite extends FunSuite:
       .of(
         "the cat and the dog, and the cat.",
         List(
-          Annotation(Span(12, 15), "the"),
-          Annotation(List(Span(4, 7), Span.point(20)), "move"),
-          Annotation(Span(29, 32), "cat"),
-          Annotation(Span(7, 11), " and"),
+          Annotation(TextSpan(12, 15), "the"),
+          Annotation(
+            List(TextSpan(4, 7), TextSpan.point(20)),
+            "move",
+          ),
+          Annotation(TextSpan(29, 32), "cat"),
+          Annotation(TextSpan(7, 11), " and"),
         ),
       )
       .toOption
@@ -266,13 +292,16 @@ class AnchoringSuite extends FunSuite:
     val words = """\S+"""
       .r
       .findAllMatchIn(text)
-      .map(found => Span(found.start, found.end))
+      .map(found => TextSpan(found.start, found.end))
       .toList
     val annotations = words.map(Annotation(_, ())) ++
       words
         .zip(words.drop(2))
         .map((word, later) =>
-          Annotation(List(word, Span.point(later.start)), ()),
+          Annotation(
+            List(word, TextSpan.point(later.start)),
+            (),
+          ),
         )
     annotations.foreach(annotation =>
       assertEquals(

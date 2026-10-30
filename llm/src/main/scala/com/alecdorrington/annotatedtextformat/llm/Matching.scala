@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.llm
 
-import com.alecdorrington.annotatedtextformat.{Script, Span}
+import com.alecdorrington.annotatedtextformat.{Script, TextSpan}
 import java.util.regex.{Matcher, Pattern}
 
 /**
@@ -116,11 +116,11 @@ final case class Found
     end: Int,
     first: Int,
     last: Int,
-    marked: Option[Span],
+    marked: Option[TextSpan],
   ):
 
   /** The span that it stands for: the part it marks, or else the whole of it. */
-  def span: Span = marked.getOrElse(Span(start, end))
+  def span: TextSpan = marked.getOrElse(TextSpan(start, end))
 
 /**
   * The pattern of a part of a quote, `source`, with the numbers of its groups
@@ -143,7 +143,7 @@ private final case class Built
     first.fold(matcher.start)((group, _) => matcher.start(group)),
     last.fold(matcher.end)((group, _) => matcher.end(group)),
     mark.map(group =>
-      Span(
+      TextSpan(
         matcher.start(group),
         matcher.end(group),
       ),

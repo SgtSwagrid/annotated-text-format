@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.Span
+import com.alecdorrington.annotatedtextformat.TextSpan
 import munit.FunSuite
 import org.scalajs.dom
 
@@ -56,10 +56,13 @@ class PassageSuite extends FunSuite:
       passage.offsetOf(paragraph, 3),
       Some(14),
     )
-    val range = passage.rangeOf(Span(4, 9)).get
+    val range = passage.rangeOf(TextSpan(4, 9)).get
     assertEquals(range.toString(), "stehe")
-    assertEquals(passage.spanOf(range), Some(Span(4, 9)))
     assertEquals(
-      passage.rangeOf(Span(4, 9)).flatMap(passage.spanOf),
-      Some(Span(4, 9)),
+      passage.spanOf(range),
+      Some(TextSpan(4, 9)),
+    )
+    assertEquals(
+      passage.rangeOf(TextSpan(4, 9)).flatMap(passage.spanOf),
+      Some(TextSpan(4, 9)),
     )

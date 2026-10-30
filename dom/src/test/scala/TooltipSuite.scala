@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{Annotation, TextSpan}
 import munit.FunSuite
 import org.scalajs.dom
 import scala.scalajs.js
@@ -81,9 +81,12 @@ class TooltipSuite extends FunSuite:
   ):
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9), Span(15, 18)))
-    val tooltip    = Tooltip(document)
-    val hovering   = Hovering[String](
+    val decoration = decorated(
+      paragraph,
+      List(TextSpan(4, 9), TextSpan(15, 18)),
+    )
+    val tooltip  = Tooltip(document)
+    val hovering = Hovering[String](
       tooltip,
       (hovered, _) => hovered.values.headOption.map(text(document, _)),
     )
@@ -106,7 +109,7 @@ class TooltipSuite extends FunSuite:
   private def decorated
     (
       paragraph: dom.Element,
-      spans: List[Span],
+      spans: List[TextSpan],
     )
     : Decoration[String] =
     val passage = Passage(paragraph)
@@ -224,9 +227,12 @@ class TooltipSuite extends FunSuite:
   ):
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9), Span(15, 18)))
-    val tooltip    = Tooltip(document)
-    val hovering   = Hovering[String](
+    val decoration = decorated(
+      paragraph,
+      List(TextSpan(4, 9), TextSpan(15, 18)),
+    )
+    val tooltip  = Tooltip(document)
+    val hovering = Hovering[String](
       tooltip,
       (_, _) => Some(text(document, "get up")),
     )
@@ -242,7 +248,7 @@ class TooltipSuite extends FunSuite:
     hovering.stop()
     val linked =
       Jsdom.element("<p><a href=\"#elsewhere\">Ich stehe früh auf.</a></p>")
-    val link    = decorated(linked, List(Span(4, 9)))
+    val link    = decorated(linked, List(TextSpan(4, 9)))
     val tapped  = Tooltip(linked.ownerDocument)
     val tapping = Hovering[String](
       tapped,
@@ -264,9 +270,12 @@ class TooltipSuite extends FunSuite:
     val paragraph =
       Jsdom.element("<p>Ich stehe früh auf. <button>Weiter</button></p>")
     val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9), Span(15, 18)))
-    val tooltip    = Tooltip(document)
-    val hovering   = Hovering[String](
+    val decoration = decorated(
+      paragraph,
+      List(TextSpan(4, 9), TextSpan(15, 18)),
+    )
+    val tooltip  = Tooltip(document)
+    val hovering = Hovering[String](
       tooltip,
       (_, _) => Some(card(document)),
       focus = Focus.Each(_ => true),
@@ -317,9 +326,12 @@ class TooltipSuite extends FunSuite:
     val document = page.ownerDocument
     val first    = decorated(
       page.firstElementChild,
-      List(Span(4, 9)),
+      List(TextSpan(4, 9)),
     )
-    val second   = decorated(page.lastElementChild, List(Span(3, 8)))
+    val second = decorated(
+      page.lastElementChild,
+      List(TextSpan(3, 8)),
+    )
     val tooltip  = Tooltip(document)
     var answers  = List.empty[Tooltip.Showing]
     val hovering = Hovering[String](
@@ -385,9 +397,9 @@ class TooltipSuite extends FunSuite:
     apart.textContent = "Sie steht auf."
     val restored = decorated(
       other.firstElementChild,
-      List(Span(4, 9)),
+      List(TextSpan(4, 9)),
     )
-    val detached = decorated(apart, List(Span(4, 9)))
+    val detached = decorated(apart, List(TextSpan(4, 9)))
     val held     = Tooltip(other.ownerDocument)
     val covering = Hovering[String](
       held,
@@ -399,7 +411,7 @@ class TooltipSuite extends FunSuite:
     restored.restore()
     covering.add(decorated(
       other.lastElementChild,
-      List(Span(3, 8)),
+      List(TextSpan(3, 8)),
     ))
     other.appendChild(apart)
     Jsdom.move(
@@ -415,7 +427,7 @@ class TooltipSuite extends FunSuite:
   ):
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
-    val decoration = decorated(paragraph, List(Span(4, 9)))
+    val decoration = decorated(paragraph, List(TextSpan(4, 9)))
     val tooltip    = Tooltip(document, label = "Wörterbuch")
     val hovering   = Hovering[String](
       tooltip,
@@ -453,7 +465,7 @@ class TooltipSuite extends FunSuite:
     assert(!element.hasAttribute("aria-describedby"))
     hovering.stop()
     val described  = Jsdom.element("<p>Ich stehe früh auf.</p>")
-    val annotation = decorated(described, List(Span(4, 9)))
+    val annotation = decorated(described, List(TextSpan(4, 9)))
     val focused    = Tooltip(described.ownerDocument)
     var showings   = List.empty[Tooltip.Showing]
     val focusing   = Hovering[String](
@@ -491,7 +503,7 @@ class TooltipSuite extends FunSuite:
     val paragraph = document.createElement("p")
     paragraph.textContent = "Ich stehe früh auf."
     root.appendChild(paragraph)
-    val decoration = decorated(paragraph, List(Span(4, 9)))
+    val decoration = decorated(paragraph, List(TextSpan(4, 9)))
     val tooltip    = Tooltip(document)
     val hovering   = Hovering[String](
       tooltip,
@@ -554,9 +566,9 @@ class TooltipSuite extends FunSuite:
     val document   = paragraph.ownerDocument
     val decoration = annotated(
       paragraph,
-      Annotation(Span(0, 3), "I"),
-      Annotation(Span(4, 9), "stand"),
-      Annotation(Span(10, 14), "early"),
+      Annotation(TextSpan(0, 3), "I"),
+      Annotation(TextSpan(4, 9), "stand"),
+      Annotation(TextSpan(10, 14), "early"),
     )
     val tooltip  = Tooltip(document)
     val hovering = Hovering[String](
@@ -598,8 +610,8 @@ class TooltipSuite extends FunSuite:
     val document   = paragraph.ownerDocument
     val decoration = annotated(
       paragraph,
-      Annotation(Span(0, 3), "I"),
-      Annotation(Span(4, 6), "get up"),
+      Annotation(TextSpan(0, 3), "I"),
+      Annotation(TextSpan(4, 6), "get up"),
     )
     val hovering = Hovering[String](
       Tooltip(document),
@@ -624,9 +636,9 @@ class TooltipSuite extends FunSuite:
     val document   = paragraph.ownerDocument
     val decoration = annotated(
       paragraph,
-      Annotation(Span(0, 3), "I"),
-      Annotation(Span(4, 9), "stand"),
-      Annotation(Span(10, 14), "early"),
+      Annotation(TextSpan(0, 3), "I"),
+      Annotation(TextSpan(4, 9), "stand"),
+      Annotation(TextSpan(10, 14), "early"),
     )
     val hovering = Hovering[String](
       Tooltip(document),
@@ -646,7 +658,7 @@ class TooltipSuite extends FunSuite:
     val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
     val document   = paragraph.ownerDocument
     val window     = document.asInstanceOf[js.Dynamic].defaultView
-    val decoration = decorated(paragraph, List(Span(4, 9)))
+    val decoration = decorated(paragraph, List(TextSpan(4, 9)))
     val tooltip    = Tooltip(document)
     val hovering   = Hovering[String](
       tooltip,

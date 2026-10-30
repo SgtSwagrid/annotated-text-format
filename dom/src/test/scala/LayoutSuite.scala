@@ -1,6 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 import munit.FunSuite
 
 class LayoutSuite extends FunSuite:
@@ -17,28 +19,28 @@ class LayoutSuite extends FunSuite:
     val segments = Layout.of(annotated(
       "She always is late.",
       Annotation(
-        List(Span(4, 10), Span.point(14)),
+        List(TextSpan(4, 10), TextSpan.point(14)),
         "move",
       ),
-      Annotation(Span(0, 3), "praise"),
+      Annotation(TextSpan(0, 3), "praise"),
     ))
     assertEquals(
       segments.map(segment =>
         segment.span -> segment.marks.map(mark => (mark.annotation, mark.part)),
       ),
       List(
-        Span(0, 3)     -> List((1, 0)),
-        Span(3, 4)     -> Nil,
-        Span(4, 10)    -> List((0, 0)),
-        Span(10, 14)   -> Nil,
-        Span.point(14) -> List((0, 1)),
-        Span(14, 19)   -> Nil,
+        TextSpan(0, 3)     -> List((1, 0)),
+        TextSpan(3, 4)     -> Nil,
+        TextSpan(4, 10)    -> List((0, 0)),
+        TextSpan(10, 14)   -> Nil,
+        TextSpan.point(14) -> List((0, 1)),
+        TextSpan(14, 19)   -> Nil,
       ),
     )
     val overlapping = Layout.of(annotated(
       "a b c",
-      Annotation(Span(0, 3), "x"),
-      Annotation(Span(2, 5), "y"),
+      Annotation(TextSpan(0, 3), "x"),
+      Annotation(TextSpan(2, 5), "y"),
     ))
     assertEquals(
       overlapping.map(_.marks.map(_.annotation)),
@@ -50,14 +52,17 @@ class LayoutSuite extends FunSuite:
   ):
     assertEquals(
       Layout.lanes(List(
-        Annotation(Span(2, 5), "inner"),
-        Annotation(Span(0, 10), "outer"),
+        Annotation(TextSpan(2, 5), "inner"),
+        Annotation(TextSpan(0, 10), "outer"),
       )),
       Vector(1, 0),
     )
-    val split   = Annotation(List(Span(0, 2), Span(6, 8)), "split")
-    val between = Annotation(Span(3, 5), "between")
-    val across  = Annotation(Span(1, 7), "across")
+    val split = Annotation(
+      List(TextSpan(0, 2), TextSpan(6, 8)),
+      "split",
+    )
+    val between = Annotation(TextSpan(3, 5), "between")
+    val across  = Annotation(TextSpan(1, 7), "across")
     assertEquals(
       Layout.lanes(List(split, between, across)),
       Vector(0, 0, 1),

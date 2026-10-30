@@ -1,6 +1,8 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.{AnnotatedText, Annotation, Span}
+import com.alecdorrington.annotatedtextformat.{
+  AnnotatedText, Annotation, TextSpan,
+}
 import munit.FunSuite
 
 class PlanSuite extends FunSuite:
@@ -12,9 +14,9 @@ class PlanSuite extends FunSuite:
       .of(
         "0123456789",
         List(
-          Annotation(Span(0, 10), "A"),
-          Annotation(Span(0, 3), "B"),
-          Annotation(Span(5, 8), "C"),
+          Annotation(TextSpan(0, 10), "A"),
+          Annotation(TextSpan(0, 3), "B"),
+          Annotation(TextSpan(5, 8), "C"),
         ),
       )
       .toOption
@@ -23,7 +25,7 @@ class PlanSuite extends FunSuite:
       _ => Colour("teal"),
       (value, _) => Option.when(value == "A")("x"),
     )
-    val pieces = Plan.of(annotated, look, List(Span(0, 10)))
+    val pieces = Plan.of(annotated, look, List(TextSpan(0, 10)))
     val lanes  = pieces
       .collect { case Piece.Wrap(_, marks, Some(_)) =>
         marks.map(mark => mark.annotation -> mark.lane)

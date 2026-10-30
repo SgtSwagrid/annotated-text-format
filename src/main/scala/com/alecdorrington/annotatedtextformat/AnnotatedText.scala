@@ -154,7 +154,7 @@ enum Problem:
     * The span `span` of the annotation at `index` does not lie within the text,
     * or ends before it begins.
     */
-  case Outside(index: Int, span: Span)
+  case Outside(index: Int, span: TextSpan)
 
   /** The spans of the annotation at `index` are out of order, or overlap. */
   case Unordered(index: Int)
@@ -163,7 +163,7 @@ enum Problem:
     * The span `span` of the annotation at `index` begins or ends within a
     * character that takes two code units, as an emoji does, splitting it.
     */
-  case Splits(index: Int, span: Span)
+  case Splits(index: Int, span: TextSpan)
 
   /** The annotations are of another text. */
   case OtherText
@@ -190,10 +190,10 @@ object Problem:
         inside.filter(splits(text, _)).map(Splits(index, _)) ++
         Option.when(!ordered(annotation.spans))(Unordered(index))
 
-  private def splits(text: String, span: Span): Boolean =
+  private def splits(text: String, span: TextSpan): Boolean =
     Script.splits(text, span.start) || Script.splits(text, span.end)
 
   /** Whether each of `spans` ends before the next begins, or where it does. */
-  private def ordered(spans: List[Span]): Boolean = spans
+  private def ordered(spans: List[TextSpan]): Boolean = spans
     .zip(spans.drop(1))
     .forall((one, two) => one.end <= two.start && one != two)

@@ -1,6 +1,6 @@
 package com.alecdorrington.annotatedtextformat.dom
 
-import com.alecdorrington.annotatedtextformat.Span
+import com.alecdorrington.annotatedtextformat.TextSpan
 import munit.FunSuite
 
 class SpacingSuite extends FunSuite:
@@ -9,21 +9,24 @@ class SpacingSuite extends FunSuite:
     "An emptied word takes the space after it, or else the one before it, but never a line break",
   ):
     assertEquals(
-      Spacing.beside("I really like it.", Span(2, 8)),
-      Some(Span(8, 9)),
+      Spacing.beside("I really like it.", TextSpan(2, 8)),
+      Some(TextSpan(8, 9)),
     )
     assertEquals(
-      Spacing.beside("I like.", Span(2, 6)),
-      Some(Span(1, 2)),
-    )
-    assertEquals(Spacing.beside("a\nb", Span(2, 3)), None)
-    assertEquals(
-      Spacing.besides("I really like it.", Span(2, 8)),
-      List(Span(8, 9), Span(1, 2)),
+      Spacing.beside("I like.", TextSpan(2, 6)),
+      Some(TextSpan(1, 2)),
     )
     assertEquals(
-      Spacing.besides("I like.", Span(2, 6)),
-      List(Span(1, 2)),
+      Spacing.beside("a\nb", TextSpan(2, 3)),
+      None,
+    )
+    assertEquals(
+      Spacing.besides("I really like it.", TextSpan(2, 8)),
+      List(TextSpan(8, 9), TextSpan(1, 2)),
+    )
+    assertEquals(
+      Spacing.besides("I like.", TextSpan(2, 6)),
+      List(TextSpan(1, 2)),
     )
 
   test(

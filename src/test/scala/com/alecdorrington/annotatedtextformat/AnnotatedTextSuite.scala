@@ -7,24 +7,36 @@ class AnnotatedTextSuite extends FunSuite:
   private val text = "Ich stehe früh auf."
 
   /** The separable verb "stehe … auf", annotated as one. */
-  private val verb = Annotation(List(Span(4, 9), Span(15, 18)), "get up")
+  private val verb = Annotation(
+    List(TextSpan(4, 9), TextSpan(15, 18)),
+    "get up",
+  )
 
   test(
     "A span counts the characters within it, a point lies at its ends but never overlaps it, and spans are as far apart as the characters between them",
   ):
-    assertEquals(Span(4, 9).length, 5)
-    assertEquals(Span(4, 9).in(text), "stehe")
-    assert(Span.point(3).isPoint)
-    assert(!Span(4, 9).isPoint)
-    assert(Span(4, 9).covers(Span.point(4)))
-    assert(Span(4, 9).covers(Span.point(9)))
-    assert(!Span(4, 9).overlaps(Span.point(6)))
-    assert(Span(4, 9).overlaps(Span(8, 12)))
-    assert(!Span(4, 9).overlaps(Span(9, 12)))
-    assertEquals(Span(0, 3).distance(Span(5, 6)), 2)
-    assertEquals(Span(5, 6).distance(Span(0, 3)), 2)
-    assertEquals(Span(0, 3).distance(Span(2, 6)), 0)
-    assertEquals(verb.extent, Some(Span(4, 18)))
+    assertEquals(TextSpan(4, 9).length, 5)
+    assertEquals(TextSpan(4, 9).in(text), "stehe")
+    assert(TextSpan.point(3).isPoint)
+    assert(!TextSpan(4, 9).isPoint)
+    assert(TextSpan(4, 9).covers(TextSpan.point(4)))
+    assert(TextSpan(4, 9).covers(TextSpan.point(9)))
+    assert(!TextSpan(4, 9).overlaps(TextSpan.point(6)))
+    assert(TextSpan(4, 9).overlaps(TextSpan(8, 12)))
+    assert(!TextSpan(4, 9).overlaps(TextSpan(9, 12)))
+    assertEquals(
+      TextSpan(0, 3).distance(TextSpan(5, 6)),
+      2,
+    )
+    assertEquals(
+      TextSpan(5, 6).distance(TextSpan(0, 3)),
+      2,
+    )
+    assertEquals(
+      TextSpan(0, 3).distance(TextSpan(2, 6)),
+      0,
+    )
+    assertEquals(verb.extent, Some(TextSpan(4, 18)))
     assertEquals(Annotation(Nil, "nothing").extent, None)
 
   test(
@@ -40,13 +52,17 @@ class AnnotatedTextSuite extends FunSuite:
       Right(List("stehe", "auf")),
     )
     val touching = Annotation(
-      List(Span(0, 3), Span.point(3), Span(3, 4)),
+      List(
+        TextSpan(0, 3),
+        TextSpan.point(3),
+        TextSpan(3, 4),
+      ),
       "",
     )
     assert(AnnotatedText.of(text, List(touching)).isRight)
     val nested = List(
-      Annotation(Span(4, 18), "outer"),
-      Annotation(Span(4, 9), "inner"),
+      Annotation(TextSpan(4, 18), "outer"),
+      Annotation(TextSpan(4, 9), "inner"),
     )
     assert(AnnotatedText.of(text, nested :+ verb).isRight)
 
@@ -57,7 +73,11 @@ class AnnotatedTextSuite extends FunSuite:
       AnnotatedText.of(text, List(Annotation(Nil, "nothing"))),
       Left(List(Problem.Unspanned(0))),
     )
-    val outside = List(Span(-1, 2), Span(3, 2), Span(15, 30))
+    val outside = List(
+      TextSpan(-1, 2),
+      TextSpan(3, 2),
+      TextSpan(15, 30),
+    )
     assertEquals(
       AnnotatedText.of(text, outside.map(Annotation(_, ""))),
       Left(
@@ -65,9 +85,9 @@ class AnnotatedTextSuite extends FunSuite:
       ),
     )
     val unordered = List(
-      List(Span(15, 18), Span(4, 9)),
-      List(Span(4, 9), Span(8, 12)),
-      List(Span.point(4), Span.point(4)),
+      List(TextSpan(15, 18), TextSpan(4, 9)),
+      List(TextSpan(4, 9), TextSpan(8, 12)),
+      List(TextSpan.point(4), TextSpan.point(4)),
     )
     assertEquals(
       AnnotatedText.of(text, unordered.map(Annotation(_, ""))),
@@ -77,15 +97,15 @@ class AnnotatedTextSuite extends FunSuite:
     assertEquals(
       AnnotatedText.of(
         emoji,
-        List(Annotation(Span(10, 11), "half")),
+        List(Annotation(TextSpan(10, 11), "half")),
       ),
-      Left(List(Problem.Splits(0, Span(10, 11)))),
+      Left(List(Problem.Splits(0, TextSpan(10, 11)))),
     )
     assert(
       AnnotatedText
         .of(
           emoji,
-          List(Annotation(Span(10, 12), "whole")),
+          List(Annotation(TextSpan(10, 12), "whole")),
         )
         .isRight,
     )
@@ -94,7 +114,10 @@ class AnnotatedTextSuite extends FunSuite:
     val annotated = AnnotatedText
       .of(
         text,
-        List(verb, Annotation(Span(10, 14), "early")),
+        List(
+          verb,
+          Annotation(TextSpan(10, 14), "early"),
+        ),
       )
       .toOption
       .get
@@ -104,7 +127,7 @@ class AnnotatedTextSuite extends FunSuite:
     )
     assertEquals(
       annotated.filter(_ == "early").annotations.map(_.spans),
-      List(List(Span(10, 14))),
+      List(List(TextSpan(10, 14))),
     )
     assertEquals(
       annotated.collect { case "get up" => 1 }.annotations,
@@ -124,8 +147,8 @@ class AnnotatedTextSuite extends FunSuite:
       Left(List(Problem.OtherText)),
     )
     val stale = List(
-      Annotation(Span(4, 9), "kept"),
-      Annotation(Span(15, 40), "left out"),
+      Annotation(TextSpan(4, 9), "kept"),
+      Annotation(TextSpan(15, 40), "left out"),
     )
     assertEquals(
       AnnotatedText.fitting(text, stale).annotations.map(_.value),

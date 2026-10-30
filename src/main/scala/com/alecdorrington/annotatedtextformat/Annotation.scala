@@ -17,7 +17,7 @@ import io.circe.{Decoder, Encoder, Json}
   *   The type of the value, specific to the application, such as a correction
   *   or a translation.
   */
-final case class Annotation[+A](spans: List[Span], value: A):
+final case class Annotation[+A](spans: List[TextSpan], value: A):
 
   /** It, with `transform` applied to its value. */
   def map[B](transform: A => B): Annotation[B] = copy(value = transform(value))
@@ -26,9 +26,9 @@ final case class Annotation[+A](spans: List[Span], value: A):
     * The span from where its first span begins to where its last ends, unless
     * it has none, as no annotation of an [[AnnotatedText]] does.
     */
-  def extent: Option[Span] = spans
+  def extent: Option[TextSpan] = spans
     .headOption
-    .map(first => Span(first.start, spans.last.end))
+    .map(first => TextSpan(first.start, spans.last.end))
 
   /** Its parts of `text`, one for each of its spans. */
   def in(text: String): List[String] = spans.map(_.in(text))
@@ -38,15 +38,15 @@ final case class Annotation[+A](spans: List[Span], value: A):
     spans.exists(span => other.spans.exists(span.overlaps))
 
   /** Its spans that are not points. */
-  def stretches: List[Span] = spans.filterNot(_.isPoint)
+  def stretches: List[TextSpan] = spans.filterNot(_.isPoint)
 
   /** Its spans that are points. */
-  def points: List[Span] = spans.filter(_.isPoint)
+  def points: List[TextSpan] = spans.filter(_.isPoint)
 
 object Annotation:
 
   /** An annotation of the one span `span`. */
-  def apply[A](span: Span, value: A): Annotation[A] =
+  def apply[A](span: TextSpan, value: A): Annotation[A] =
     Annotation(List(span), value)
 
   /**
@@ -62,7 +62,7 @@ object Annotation:
           Json.obj(
             "type"     -> Json.fromString("array"),
             "minItems" -> Json.fromInt(1),
-            "items"    -> Span.schema,
+            "items"    -> TextSpan.schema,
           ),
           doc.flatMap(_.params.get("spans")),
         ),
@@ -90,6 +90,6 @@ object Annotation:
     )
 
   given [A : Decoder] => Decoder[Annotation[A]] =
-    Decoder.forProduct2("spans", "value")((spans: List[Span], value: A) =>
+    Decoder.forProduct2("spans", "value")((spans: List[TextSpan], value: A) =>
       Annotation(spans, value),
     )

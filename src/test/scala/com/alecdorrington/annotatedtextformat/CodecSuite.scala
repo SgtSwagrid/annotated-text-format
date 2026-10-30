@@ -27,10 +27,10 @@ class CodecSuite extends FunSuite:
       "She always is late.",
       List(
         Annotation(
-          List(Span(4, 10), Span.point(14)),
+          List(TextSpan(4, 10), TextSpan.point(14)),
           Remark.Fix("She is always late."),
         ),
-        Annotation(Span(0, 3), Remark.Praise),
+        Annotation(TextSpan(0, 3), Remark.Praise),
       ),
     )
     .toOption

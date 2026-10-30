@@ -1,7 +1,7 @@
 package com.alecdorrington.annotatedtextformat.llm
 
 import com.alecdorrington.annotatedtextformat.{
-  AnnotatedText, Annotation, Problem, Span,
+  AnnotatedText, Annotation, Problem, TextSpan,
 }
 import scala.collection.mutable
 
@@ -133,7 +133,7 @@ private final case class Quoting(text: String):
     * `span`, quoted with `context` words on either side of it, marked between
     * them; or alone if there are none; or, if it is a point, with a word more.
     */
-  private def part(span: Span, context: Int): String =
+  private def part(span: TextSpan, context: Int): String =
     if span.isPoint then
       around(
         span,
@@ -152,7 +152,7 @@ private final case class Quoting(text: String):
 
   private def around
     (
-      span: Span,
+      span: TextSpan,
       words: Int,
       open: String,
       close: String,
@@ -195,7 +195,7 @@ private final case class Search[A]
     text: String,
     matching: Matching,
     cursor: Int = 0,
-    previous: Option[List[Span]] = None,
+    previous: Option[List[TextSpan]] = None,
     found: Vector[Annotation[A]] = Vector.empty,
     unplaced: Vector[Unplaced[A]] = Vector.empty,
   ):
@@ -215,7 +215,7 @@ private final case class Search[A]
   def placesBack
     (
       quoted: QuotedAnnotation[A],
-      spans: List[Span],
+      spans: List[TextSpan],
     )
     : Boolean =
     val next = this.next(quoted, unplaced.size + found.size)
@@ -235,7 +235,7 @@ private final case class Finding
     text: String,
     matching: Matching,
     cursor: Int,
-    previous: Option[List[Span]],
+    previous: Option[List[TextSpan]],
   ):
 
   /** Matching as the quote is written, and then as loosely as allowed. */
@@ -254,7 +254,7 @@ private final case class Finding
     )
 
   /** Where `quote` is placed, or why it is not. */
-  def place(quote: String): Either[Unplaced.Reason, List[Span]] =
+  def place(quote: String): Either[Unplaced.Reason, List[TextSpan]] =
     val readings = Finding.readings(quote)
     if !readings.exists(_.exists(Matching.matchable)) then
       Left(Unplaced.Reason.Empty)
@@ -265,7 +265,7 @@ private final case class Finding
         case None                       => Left(missing(readings))
 
   /** Every placing of `readings`, by each way of looking in turn. */
-  private def attempts(readings: List[List[String]]): LazyList[List[Span]] =
+  private def attempts(readings: List[List[String]]): LazyList[List[TextSpan]] =
     ways
       .to(LazyList)
       .flatMap(way =>
@@ -274,7 +274,7 @@ private final case class Finding
           .flatMap(matching => readings.to(LazyList).flatMap(way(matching, _))),
       )
 
-  private def ways: List[(Matching, List[String]) => Option[List[Span]]] =
+  private def ways: List[(Matching, List[String]) => Option[List[TextSpan]]] =
     List(onwards, once)
 
   /**
@@ -283,14 +283,14 @@ private final case class Finding
     */
   private def onwards
     (matching: Matching, parts: List[String])
-    : Option[List[Span]] =
+    : Option[List[TextSpan]] =
     val all = from(matching, parts, cursor)
     all.find(spans => !previous.contains(spans)).orElse(all.headOption)
 
   /** Where `parts` are, if the first occurs only once, anywhere. */
   private def once
     (matching: Matching, parts: List[String])
-    : Option[List[Span]] = parts
+    : Option[List[TextSpan]] = parts
     .headOption
     .map(matches(matching, _))
     .collect { case only :: Nil => only.span.start }
@@ -308,7 +308,7 @@ private final case class Finding
       parts: List[String],
       start: Int,
     )
-    : LazyList[List[Span]] = parts match
+    : LazyList[List[TextSpan]] = parts match
     case Nil          => LazyList.empty
     case head :: rest => matches(matching, head)
         .to(LazyList)
@@ -323,8 +323,8 @@ private final case class Finding
       parts: List[String],
       start: Int,
     )
-    : Option[List[Span]] = parts
-    .foldLeft(Option((start, Vector.empty[Span]))):
+    : Option[List[TextSpan]] = parts
+    .foldLeft(Option((start, Vector.empty[TextSpan]))):
       case (Some((at, spans)), part) => matches(matching, part)
           .find(_.span.start >= at)
           .map(found => (found.span.end, spans :+ found.span))
@@ -342,7 +342,7 @@ private final case class Finding
     then Unplaced.Reason.OutOfOrder
     else Unplaced.Reason.Missing
 
-  private def fits(spans: List[Span]): Boolean = Problem
+  private def fits(spans: List[TextSpan]): Boolean = Problem
     .of(text)(Annotation(spans, ()), 0)
     .isEmpty
 

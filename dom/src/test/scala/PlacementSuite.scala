@@ -49,3 +49,20 @@ class PlacementSuite extends FunSuite:
     val hull = line.hull(Box(350, 294, 200, 100))
     assert(hull.contains(450, 397))
     assert(!hull.contains(450, 430))
+
+  test(
+    "The gap between a line and its tooltip runs from the edge of one to the other, as wide as both, unless they meet",
+  ):
+    val line = Box(400, 400, 100, 20)
+    assertEquals(
+      Placement.between(line, Box(350, 294, 200, 100)),
+      Some(Box(350, 394, 200, 6)),
+    )
+    assertEquals(
+      Placement.between(line, Box(450, 426, 200, 100)),
+      Some(Box(400, 420, 250, 6)),
+    )
+    assertEquals(
+      Placement.between(line, Box(350, 8, 200, 900)),
+      None,
+    )

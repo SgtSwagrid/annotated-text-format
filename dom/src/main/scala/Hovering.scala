@@ -26,12 +26,13 @@ final case class Hovered[A]
   * too. `content` is given the showing that it is for, by which it may replace
   * what it gave, as with an answer that comes later, which is dropped if the
   * tooltip has since closed or moved on. The tooltip stays open while the
-  * pointer crosses from that line to it, and while it is over it, so that its
-  * content may be scrolled or used; it closes as the pointer moves elsewhere,
-  * leaves the window, or the page moves the line beneath it, and on Escape,
-  * which goes on to the page unless the focus opened the tooltip or is within
-  * it, as the page may close its own menus by it. While it is open, the element
-  * it is for is described by it.
+  * pointer crosses from that line to it, over the gap that it covers if it is
+  * interactive, so that nothing highlighted beneath takes its place, and while
+  * it is over it, so that its content may be scrolled or used; it closes as the
+  * pointer moves elsewhere, leaves the window, or the page moves the line
+  * beneath it, and on Escape, which goes on to the page unless the focus opened
+  * the tooltip or is within it, as the page may close its own menus by it.
+  * While it is open, the element it is for is described by it.
   *
   * A touch or a pen, which has no pointer to hover, shows it by a tap, whose
   * click goes no further, as to a link the element is in; and a tap on the

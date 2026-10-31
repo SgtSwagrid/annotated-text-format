@@ -7,9 +7,13 @@ import scala.scalajs.js
   * A tooltip in a page's top layer, where no part of the page can clip or cover
   * it, holding any content in a shadow root, which the page's styles do not
   * reach. It is kept within the window, and content too large for it scrolls
-  * within it. Each time it is shown is a [[Tooltip.Showing]] of its own, by
-  * which its content may be replaced while it lasts, as by an entry that
-  * arrives later, and it is placed again as its size changes.
+  * within it. If it is `interactive`, it covers the gap between it and the line
+  * it is for as well, though it shows nothing there, so that the pointer
+  * crossing to it is over it all the way, and never over what lies beneath the
+  * gap, as a highlight on the next line, which would show a tooltip of its own.
+  * Each time it is shown is a [[Tooltip.Showing]] of its own, by which its
+  * content may be replaced while it lasts, as by an entry that arrives later,
+  * and it is placed again as its size changes.
   *
   * Its `host` is the element in the page, an `atf-tooltip`, which no rule of
   * the page for its own elements matches, with an `id` of its own, by which
@@ -32,6 +36,7 @@ final class Tooltip private (
   val host: dom.HTMLElement,
   root: js.Dynamic,
   body: dom.Element,
+  bridge: Option[dom.HTMLElement],
 ):
 
   private var line: Option[Box] = None
@@ -139,8 +144,28 @@ final class Tooltip private (
         "important",
       )
     host.style.setProperty("top", s"${ placed.top }px", "important")
-    host.setAttribute("data-side", side.toString.toLowerCase),
+    host.setAttribute("data-side", side.toString.toLowerCase)
+    bridge.foreach(cover(_, Placement.between(line, placed))),
   )
+
+  /** Fits `bridge` to `gap`, or hides it if there is none. */
+  private def cover
+    (
+      bridge: dom.HTMLElement,
+      gap: Option[Box],
+    )
+    : Unit = gap match
+    case Some(gap) =>
+      List(
+        "left"   -> gap.left,
+        "top"    -> gap.top,
+        "width"  -> gap.width,
+        "height" -> gap.height,
+      ).foreach((property, value) =>
+        bridge.style.setProperty(property, s"${ value }px", "important"),
+      )
+      bridge.style.setProperty("display", "block", "important")
+    case None => bridge.style.setProperty("display", "none", "important")
 
 object Tooltip:
 
@@ -199,22 +224,32 @@ object Tooltip:
       if interactive then "dialog" else "tooltip",
     )
     if label.nonEmpty then host.setAttribute("aria-label", label)
-    val style = document.createElement("style")
-    val body  = document.createElement("div")
+    val style  = document.createElement("style")
+    val body   = document.createElement("div")
+    val bridge = Option.when(interactive)(
+      document.createElement(bridging).asInstanceOf[dom.HTMLElement],
+    )
     style.textContent = own(interactive) + styles
     root.appendChild(style)
     adopt(root, document, sheets)
+    bridge.foreach(root.appendChild(_))
     root.appendChild(body)
     host.setAttribute("popover", "manual")
     host.setAttribute(Passage.decorated, "")
     host.setAttribute("hidden", "")
     if interactive then keep(host)
-    val tooltip = new Tooltip(host, root, body)
+    val tooltip = new Tooltip(host, root, body, bridge)
     tooltip.observer = resizing(host, tooltip)
     tooltip
 
   /** The name of the host's element. */
   private val tag = "atf-tooltip"
+
+  /**
+    * The name of the element within an interactive tooltip that covers the gap
+    * between it and its line, which no rule of its content matches.
+    */
+  private val bridging = s"$tag-bridge"
 
   /** How many tooltips have been made, for their `id`s. */
   private var made = 0
@@ -379,7 +414,9 @@ object Tooltip:
     * closed, as resetting everything would show it then. Each but `all` and
     * `inset` is `!important`, so that the page's rules for every element do not
     * outweigh it; those two are not, as they would then outweigh where it is
-    * placed, which is set on the host itself.
+    * placed, which is set on the host itself. What covers the gap to its line,
+    * if it is `interactive`, is fixed in the window, so that the host, which
+    * clips what it holds, does not clip it, and hidden until it is placed.
     */
   private def own(interactive: Boolean): String =
     s""":host { all: initial; inset: auto; display: block !important; position: fixed !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-sizing: border-box !important; max-width: calc(100vw - ${ 2 *
@@ -389,7 +426,11 @@ object Tooltip:
         if interactive then "" else " pointer-events: none !important;"
       } }
        |:host([hidden]) { display: none !important; }
-       |""".stripMargin
+       |${
+        if interactive then
+          s"$bridging { all: initial !important; display: none !important; position: fixed !important; }\n"
+        else ""
+      }""".stripMargin
 
   /**
     * Places `tooltip` again whenever its size changes, where the browser can

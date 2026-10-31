@@ -704,3 +704,71 @@ class TooltipSuite extends FunSuite:
       "display: none !important",
     ).foreach(rule => assert(own.contains(rule), rule))
     assert(!own.contains("inset: auto !important"))
+
+  /** Makes `element` measure as `box`, as jsdom measures every box as empty. */
+  private def measured(element: dom.Element, box: Box): Unit = element
+    .asInstanceOf[js.Dynamic]
+    .updateDynamic("getBoundingClientRect")(
+      (
+        () =>
+          js.Dynamic
+            .literal(
+              left = box.left,
+              top = box.top,
+              width = box.width,
+              height = box.height,
+            ),
+      ): js.Function0[js.Dynamic],
+    )
+
+  /** The box covering the gap between `tooltip` and its line, if any. */
+  private def cover(tooltip: Tooltip): Option[Box] = Option(
+    tooltip
+      .host
+      .asInstanceOf[js.Dynamic]
+      .shadowRoot
+      .querySelector("atf-tooltip-bridge")
+      .asInstanceOf[dom.HTMLElement],
+  ).filter(_.style.display == "block")
+    .map(bridge =>
+      def px(property: String): Double =
+        bridge.style.getPropertyValue(property).stripSuffix("px").toDouble
+      Box(
+        px("left"),
+        px("top"),
+        px("width"),
+        px("height"),
+      ),
+    )
+
+  test(
+    "An interactive tooltip covers the gap to its line, above or below, and one that is not leaves it",
+  ):
+    val document = Jsdom.element("<p>x</p>").ownerDocument
+    val tooltip  = Tooltip(document)
+    measured(tooltip.host, Box(0, 0, 200, 100))
+    assertEquals(cover(tooltip), None)
+    tooltip.show(
+      text(document, "get up"),
+      Box(400, 400, 100, 20),
+    )
+    assertEquals(
+      cover(tooltip),
+      Some(Box(350, 394, 200, 6)),
+    )
+    assertEquals(shown(tooltip), "get up")
+    tooltip.show(
+      text(document, "early"),
+      Box(400, 20, 100, 20),
+    )
+    assertEquals(
+      cover(tooltip),
+      Some(Box(350, 40, 200, 6)),
+    )
+    val passive = Tooltip(document, interactive = false)
+    measured(passive.host, Box(0, 0, 200, 100))
+    passive.show(
+      text(document, "get up"),
+      Box(400, 400, 100, 20),
+    )
+    assertEquals(cover(passive), None)

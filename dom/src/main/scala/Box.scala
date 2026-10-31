@@ -124,6 +124,21 @@ object Placement:
       side,
     )
 
+  /**
+    * The gap between `line` and `tip`, placed for it, which the pointer crosses
+    * from one to the other: from the edge of one to the edge of the other, and
+    * as wide as both together; or none if they touch or overlap, as a tip too
+    * tall for the window may.
+    */
+  def between(line: Box, tip: Box): Option[Box] =
+    val left  = line.left.min(tip.left)
+    val right = line.right.max(tip.right)
+    if tip.bottom < line.top then
+      Some(Box.around(left, tip.bottom, right, line.top))
+    else if line.bottom < tip.top then
+      Some(Box.around(left, line.bottom, right, tip.top))
+    else None
+
   private def sideOf(line: Box, tip: Box, viewport: Box): Side =
     val above = line.top - gap - (viewport.top + margin)
     val below = viewport.bottom - margin - (line.bottom + gap)

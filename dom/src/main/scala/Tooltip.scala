@@ -7,13 +7,19 @@ import scala.scalajs.js
   * A tooltip in a page's top layer, where no part of the page can clip or cover
   * it, holding any content in a shadow root, which the page's styles do not
   * reach. It is kept within the window, and content too large for it scrolls
-  * within it. If it is `interactive`, it covers the gap between it and the line
-  * it is for as well, though it shows nothing there, so that the pointer
-  * crossing to it is over it all the way, and never over what lies beneath the
-  * gap, as a highlight on the next line, which would show a tooltip of its own.
-  * Each time it is shown is a [[Tooltip.Showing]] of its own, by which its
-  * content may be replaced while it lasts, as by an entry that arrives later,
-  * and it is placed again as its size changes.
+  * within it. It opens on whichever side of the line it fits, keeping room
+  * there for it to grow to `reserve` tall, as when content to come will fill
+  * it. Once held, as the mouse that opened it holds it, if it is `interactive`,
+  * it keeps to that side as it grows, scrolling within the room there, rather
+  * than moving across the line from beneath the pointer crossing to it; and it
+  * covers the smallest convex shape holding both it and the line, though it
+  * shows nothing there, but the line itself, which takes the pointer as before,
+  * so that the pointer crossing to it, straight or slanting, is over it all the
+  * way, and never over what lies beneath, as a highlight on the line beyond or
+  * beside the word on its own, which would show a tooltip of its own. Each time
+  * it is shown is a [[Tooltip.Showing]] of its own, by which its content may be
+  * replaced while it lasts, as by an entry that arrives later, and it is placed
+  * again as its size changes.
   *
   * Its `host` is the element in the page, an `atf-tooltip`, which no rule of
   * the page for its own elements matches, with an `id` of its own, by which
@@ -37,9 +43,20 @@ final class Tooltip private (
   root: js.Dynamic,
   body: dom.Element,
   bridge: Option[dom.HTMLElement],
+  reserve: Double,
 ):
 
   private var line: Option[Box] = None
+
+  /** The side of its line it stands on, while it is open. */
+  private var standing: Option[Side] = None
+
+  /**
+    * The side of its line it is held on, if it is, as by the pointer that
+    * opened it: there it stays as it grows, scrolling within the room there,
+    * rather than moving across the line from beneath the pointer.
+    */
+  private var held: Option[Side] = None
 
   /** What it shows, while it is open. */
   private var current: Option[Tooltip.Showing] = None
@@ -93,18 +110,40 @@ final class Tooltip private (
     fill(content)
     this.line = Some(line)
     current = Some(showing)
+    held = None
     open(near)
     fit()
 
-  /** Places it for `line`, as after the line has moved, if it is open. */
+  /**
+    * Places it for `line`, as after the line has moved, if it is open, on
+    * whichever side of it it fits.
+    */
   private[dom] def follow(line: Box): Unit = if isOpen then
     this.line = Some(line)
+    held = None
+    fit()
+
+  /**
+    * Keeps it on the side of its line that it stands on, if it is open and
+    * `interactive`, as for the pointer that opened it, which may cross to it at
+    * any moment, until it closes, shows something else or follows its line: as
+    * it grows, as when an entry arrives, it no longer moves across the line to
+    * where it would fit, from beneath the pointer, but scrolls within the room
+    * on its side; and it covers the way to it from its line (see
+    * [[Placement.crossing]]). One that is not interactive the pointer passes
+    * through, and never crosses to.
+    */
+  private[dom] def hold(): Unit = if held.isEmpty && bridge.isDefined then
+    held = standing
     fit()
 
   /** Closes it, keeping it in the page to open again. */
   def hide(): Unit =
     line = None
     current = None
+    standing = None
+    held = None
+    host.style.removeProperty(Tooltip.room)
     host.setAttribute("hidden", "")
     Tooltip.popover(host).foreach(_.hidePopover())
 
@@ -129,13 +168,28 @@ final class Tooltip private (
       .filterNot(_ => host.matches(":popover-open"))
       .foreach(_.showPopover())
 
-  /** Places it for its line, as it is now measured. */
+  /**
+    * Places it for its line, as it is now measured, on the side it is held on,
+    * if it is, no taller than the room there.
+    */
   private def fit(): Unit = line.foreach(line =>
+    val window = Box.window(host.ownerDocument)
+    held match
+      case Some(side) => host
+          .style
+          .setProperty(
+            Tooltip.room,
+            s"${ Placement.room(line, side, window).max(0) }px",
+          )
+      case None => host.style.removeProperty(Tooltip.room)
     val (placed, side) = Placement.place(
       line,
       Box.of(host.getBoundingClientRect()),
-      Box.window(host.ownerDocument),
+      window,
+      held,
+      reserve,
     )
+    standing = Some(side)
     host
       .style
       .setProperty(
@@ -145,25 +199,38 @@ final class Tooltip private (
       )
     host.style.setProperty("top", s"${ placed.top }px", "important")
     host.setAttribute("data-side", side.toString.toLowerCase)
-    bridge.foreach(cover(_, Placement.between(line, placed))),
+    bridge.foreach(cover(
+      _,
+      held.flatMap(_ => Placement.crossing(line, placed)),
+    )),
   )
 
-  /** Fits `bridge` to `gap`, or hides it if there is none. */
+  /**
+    * Fits `bridge` to `way`, the box it covers and the path within it that it
+    * is cut to, or hides it if there is none.
+    */
   private def cover
     (
       bridge: dom.HTMLElement,
-      gap: Option[Box],
+      way: Option[(Box, String)],
     )
-    : Unit = gap match
-    case Some(gap) =>
+    : Unit = way match
+    case Some((box, path)) =>
       List(
-        "left"   -> gap.left,
-        "top"    -> gap.top,
-        "width"  -> gap.width,
-        "height" -> gap.height,
+        "left"   -> box.left,
+        "top"    -> box.top,
+        "width"  -> box.width,
+        "height" -> box.height,
       ).foreach((property, value) =>
         bridge.style.setProperty(property, s"${ value }px", "important"),
       )
+      bridge
+        .style
+        .setProperty(
+          "clip-path",
+          s"""path(evenodd, "$path")""",
+          "important",
+        )
       bridge.style.setProperty("display", "block", "important")
     case None => bridge.style.setProperty("display", "none", "important")
 
@@ -194,7 +261,9 @@ object Tooltip:
     * its shadow root by the CSS `styles`, as `.card { padding: 8px }`, and by
     * `sheets`, made for `document`, and which the pointer may move onto and
     * use, unless not `interactive`, when it is named `label`, as for a reader
-    * of the screen. Its shadow root is `closed` to the page's scripts if so.
+    * of the screen. Its shadow root is `closed` to the page's scripts if so. It
+    * opens where there is room for it to be `reserve` tall, if it is not
+    * already, as for an entry that will fill it, in pixels.
     *
     * The page's own rules for every element, as `* { padding: 0 }`, outweigh
     * rules for the host, `:host`, unless those are marked `!important`, as its
@@ -209,6 +278,7 @@ object Tooltip:
       interactive: Boolean = true,
       label: String = "",
       closed: Boolean = false,
+      reserve: Double = 0,
     )
     : Tooltip =
     val host = document.createElement(tag).asInstanceOf[dom.HTMLElement]
@@ -238,7 +308,7 @@ object Tooltip:
     host.setAttribute(Passage.decorated, "")
     host.setAttribute("hidden", "")
     if interactive then keep(host)
-    val tooltip = new Tooltip(host, root, body, bridge)
+    val tooltip = new Tooltip(host, root, body, bridge, reserve)
     tooltip.observer = resizing(host, tooltip)
     tooltip
 
@@ -246,10 +316,17 @@ object Tooltip:
   private val tag = "atf-tooltip"
 
   /**
-    * The name of the element within an interactive tooltip that covers the gap
-    * between it and its line, which no rule of its content matches.
+    * The name of the element within an interactive tooltip that covers the way
+    * between it and its line while it is held, which no rule of its content
+    * matches.
     */
   private val bridging = s"$tag-bridge"
+
+  /**
+    * The custom property of the host by which, while it is held on one side of
+    * its line, it is kept no taller than the room there.
+    */
+  private val room = s"--$tag-room"
 
   /** How many tooltips have been made, for their `id`s. */
   private var made = 0
@@ -414,9 +491,14 @@ object Tooltip:
     * closed, as resetting everything would show it then. Each but `all` and
     * `inset` is `!important`, so that the page's rules for every element do not
     * outweigh it; those two are not, as they would then outweigh where it is
-    * placed, which is set on the host itself. What covers the gap to its line,
+    * placed, which is set on the host itself. What covers the way to its line,
     * if it is `interactive`, is fixed in the window, so that the host, which
-    * clips what it holds, does not clip it, and hidden until it is placed.
+    * clips what it holds, does not clip it, and hidden until it is held. While
+    * it is held on one side of its line, it is no taller than the room there,
+    * which the host's own style gives by a custom property, as the host's style
+    * is outweighed by the rules within its shadow root that are `!important`;
+    * where the browser has no `dvh`, which every browser with popovers has, it
+    * is as tall as the window allows.
     */
   private def own(interactive: Boolean): String =
     s""":host { all: initial; inset: auto; display: block !important; position: fixed !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-sizing: border-box !important; max-width: calc(100vw - ${ 2 *
@@ -425,6 +507,8 @@ object Tooltip:
         Placement.margin }px) !important; overflow: auto !important;${
         if interactive then "" else " pointer-events: none !important;"
       } }
+       |@supports (max-height: 100dvh) { :host { max-height: min(calc(100dvh - ${ 2 *
+        Placement.margin }px), var($room, 100dvh)) !important; } }
        |:host([hidden]) { display: none !important; }
        |${
         if interactive then

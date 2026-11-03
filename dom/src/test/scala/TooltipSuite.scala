@@ -721,8 +721,11 @@ class TooltipSuite extends FunSuite:
       ): js.Function0[js.Dynamic],
     )
 
-  /** The box covering the gap between `tooltip` and its line, if any. */
-  private def cover(tooltip: Tooltip): Option[Box] = Option(
+  /**
+    * The box that covers the way between `tooltip` and its line, and the path
+    * it is cut to, if it is shown.
+    */
+  private def cover(tooltip: Tooltip): Option[(Box, String)] = Option(
     tooltip
       .host
       .asInstanceOf[js.Dynamic]
@@ -738,37 +741,132 @@ class TooltipSuite extends FunSuite:
         px("top"),
         px("width"),
         px("height"),
-      ),
+      ) -> bridge.style.getPropertyValue("clip-path"),
     )
 
+  /** What covers the way from `line` to `tip`, as a tooltip's bridge has it. */
+  private def crossing(line: Box, tip: Box): Option[(Box, String)] = Placement
+    .crossing(line, tip)
+    .map((box, path) => box -> s"""path(evenodd, "$path")""")
+
   test(
-    "An interactive tooltip covers the gap to its line, above or below, and one that is not leaves it",
+    "An interactive tooltip held covers the way to its line, above or below, but each of them; one not held, or not interactive, covers nothing",
   ):
     val document = Jsdom.element("<p>x</p>").ownerDocument
     val tooltip  = Tooltip(document)
     measured(tooltip.host, Box(0, 0, 200, 100))
     assertEquals(cover(tooltip), None)
-    tooltip.show(
-      text(document, "get up"),
-      Box(400, 400, 100, 20),
-    )
+    val low = Box(400, 400, 100, 20)
+    tooltip.show(text(document, "get up"), low)
+    assertEquals(cover(tooltip), None)
+    tooltip.hold()
     assertEquals(
       cover(tooltip),
-      Some(Box(350, 394, 200, 6)),
+      crossing(low, Box(350, 294, 200, 100)),
     )
+    assert(cover(tooltip).nonEmpty)
     assertEquals(shown(tooltip), "get up")
-    tooltip.show(
-      text(document, "early"),
-      Box(400, 20, 100, 20),
-    )
+    val high = Box(400, 20, 100, 20)
+    tooltip.show(text(document, "early"), high)
+    assertEquals(cover(tooltip), None)
+    tooltip.hold()
     assertEquals(
       cover(tooltip),
-      Some(Box(350, 40, 200, 6)),
+      crossing(high, Box(350, 46, 200, 100)),
     )
     val passive = Tooltip(document, interactive = false)
     measured(passive.host, Box(0, 0, 200, 100))
-    passive.show(
-      text(document, "get up"),
-      Box(400, 400, 100, 20),
-    )
+    passive.show(text(document, "get up"), low)
+    passive.hold()
     assertEquals(cover(passive), None)
+
+  /**
+    * Makes the host of `tooltip` measure where it is placed, as tall as `tall`
+    * gives, but no taller than the room it is held to, as a browser lays it
+    * out, and jsdom does not.
+    */
+  private def laidOut(tooltip: Tooltip, tall: () => Double): Unit =
+    val host                                 = tooltip.host
+    def px(property: String): Option[Double] = Option(
+      host.style.getPropertyValue(property),
+    ).filter(_.nonEmpty).map(_.stripSuffix("px").toDouble)
+    host
+      .asInstanceOf[js.Dynamic]
+      .updateDynamic("getBoundingClientRect")(
+        (
+          () =>
+            js.Dynamic
+              .literal(
+                left = px("left").getOrElse(0.0),
+                top = px("top").getOrElse(0.0),
+                width = 200,
+                height = px("--atf-tooltip-room").fold(tall())(tall().min),
+              ),
+        ): js.Function0[js.Dynamic],
+      )
+
+  test(
+    "A tooltip the pointer opens keeps to its side of the line as it grows, no taller than the room there, and opens where it has room for what it reserves",
+  ):
+    val paragraph  = Jsdom.element("<p>Ich stehe früh auf.</p>")
+    val document   = paragraph.ownerDocument
+    val decoration = decorated(paragraph, List(TextSpan(4, 9)))
+    val element    = decoration.elements(0).head
+    val line       = Box(400, 150, 100, 20)
+    measured(element, line)
+    var tall    = 80.0
+    var showing = Option.empty[Tooltip.Showing]
+    def hovering(tooltip: Tooltip): Hovering[String] =
+      laidOut(tooltip, () => tall)
+      val hovering = Hovering[String](
+        tooltip,
+        (hovered, opened) =>
+          showing = Some(opened)
+          hovered.values.headOption.map(text(document, _)),
+      )
+      hovering.add(decoration)
+      hovering
+    def placed(tooltip: Tooltip): (String, String) = (
+      tooltip.host.getAttribute("data-side"),
+      tooltip.host.style.getPropertyValue("--atf-tooltip-room"),
+    )
+    def grow(to: Double): Unit =
+      tall = to
+      assert(showing.exists(_.update(text(document, "aufstehen"))))
+    val (word, gap, away) = (element.firstChild, paragraph.firstChild, 900)
+    val tooltip           = Tooltip(document)
+    val held              = hovering(tooltip)
+    Jsdom.move(word, 450, 160)
+    assertEquals(placed(tooltip), ("above", "136px"))
+    Jsdom.move(gap, 450, 147)
+    grow(300)
+    assertEquals(placed(tooltip), ("above", "136px"))
+    assertEquals(tooltip.box, Some(Box(350, 8, 200, 136)))
+    assertEquals(
+      cover(tooltip),
+      crossing(line, Box(350, 8, 200, 136)),
+    )
+    Jsdom.move(word, 450, 160)
+    assertEquals(placed(tooltip), ("above", "136px"))
+    Jsdom.move(gap, 505, 155)
+    assert(tooltip.isOpen)
+    Jsdom.move(gap, 540, 165)
+    assertEquals(
+      (tooltip.isOpen, placed(tooltip)._2),
+      (false, ""),
+    )
+    Jsdom.move(gap, away, away)
+    held.stop()
+    tall = 80
+    val free = tooltip.show(text(document, "get up"), line)
+    assertEquals(placed(tooltip), ("above", ""))
+    tall = 300
+    assert(free.update(text(document, "aufstehen")))
+    assertEquals(placed(tooltip), ("below", ""))
+    tooltip.hide()
+    tall = 80
+    val roomy    = Tooltip(document, reserve = 200)
+    val reserved = hovering(roomy)
+    Jsdom.move(word, 450, 160)
+    assertEquals(placed(roomy), ("below", "584px"))
+    reserved.stop()

@@ -26,13 +26,18 @@ final case class Hovered[A]
   * too. `content` is given the showing that it is for, by which it may replace
   * what it gave, as with an answer that comes later, which is dropped if the
   * tooltip has since closed or moved on. The tooltip stays open while the
-  * pointer crosses from that line to it, over the gap that it covers if it is
-  * interactive, so that nothing highlighted beneath takes its place, and while
-  * it is over it, so that its content may be scrolled or used; it closes as the
-  * pointer moves elsewhere, leaves the window, or the page moves the line
-  * beneath it, and on Escape, which goes on to the page unless the focus opened
-  * the tooltip or is within it, as the page may close its own menus by it.
-  * While it is open, the element it is for is described by it.
+  * pointer is within the smallest convex shape holding both that line and it,
+  * as it crosses from one to the other, straight or slanting, so that its
+  * content may be scrolled or used. If it is interactive, and the mouse opened
+  * it, it covers that shape but the line, so that nothing highlighted beneath,
+  * on the line beyond or beside the element on its own, takes its place, and
+  * keeps to the side of the line it opened on as it grows, scrolling within the
+  * room there, lest it move across the line and leave the pointer over the next
+  * one instead. It closes as the pointer moves elsewhere, leaves the window, or
+  * the page moves the line beneath it, and on Escape, which goes on to the page
+  * unless the focus opened the tooltip or is within it, as the page may close
+  * its own menus by it. While it is open, the element it is for is described by
+  * it.
   *
   * A touch or a pen, which has no pointer to hover, shows it by a tap, whose
   * click goes no further, as to a link the element is in; and a tap on the
@@ -306,6 +311,7 @@ final class Hovering[A] private (
         ))
         focused = byFocus
         tooltip.start(showing, node, line, Some(element))
+        if !byFocus && !touching then tooltip.hold()
         describe(element)
         true
       case None => false
@@ -478,12 +484,13 @@ final class Hovering[A] private (
       hide()
 
   /**
-    * Whether `(x, y)` lies within the box holding both the line the tooltip is
-    * for and the tooltip, across which the pointer crosses to it.
+    * Whether `(x, y)` lies within the smallest convex shape holding both the
+    * line the tooltip is for and the tooltip, across which the pointer crosses
+    * to it.
     */
   private def bridged(x: Double, y: Double): Boolean = shown
-    .flatMap(shown => tooltip.box.map(shown.line.hull))
-    .exists(_.contains(x, y))
+    .flatMap(shown => tooltip.box.map(box => Placement.around(shown.line, box)))
+    .exists(Placement.within(_, x, y))
 
   /** Whether `target` is the tooltip, or within it. */
   private def within(target: dom.EventTarget): Boolean = Option(target).exists(

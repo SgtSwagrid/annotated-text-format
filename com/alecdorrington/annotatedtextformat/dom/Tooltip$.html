@@ -149,12 +149,12 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
-        <div class="documentableElement" id="apply-fffff3a4">
+        <div class="documentableElement" id="apply-fffff47d">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Tooltip$.html#apply-fffff3a4" t="n" class="documentableName ">apply</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">document</span>: <span data-unresolved-link="" t="t">Document</span>, <span t="k"></span><span data-unresolved-link="" t="n">styles</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">sheets</span>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">CSSStyleSheet</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">interactive</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">label</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">closed</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <a href="Tooltip.html" t="t">Tooltip</a>
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Tooltip$.html#apply-fffff47d" t="n" class="documentableName ">apply</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">document</span>: <span data-unresolved-link="" t="t">Document</span>, <span t="k"></span><span data-unresolved-link="" t="n">styles</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">sheets</span>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">CSSStyleSheet</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">interactive</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">label</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">closed</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">reserve</span>: <span data-unresolved-link="" t="t">Double</span> = ...): <a href="Tooltip.html" t="t">Tooltip</a>
            </div>
           </div>
          </div>
@@ -164,11 +164,11 @@ node3 -> node2;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>A tooltip for <code>document</code>, not yet in it, whose content is styled within its shadow root by the CSS <code>styles</code>, as <code>.card { padding: 8px }</code>, and by <code>sheets</code>, made for <code>document</code>, and which the pointer may move onto and use, unless not <code>interactive</code>, when it is named <code>label</code>, as for a reader of the screen. Its shadow root is <code>closed</code> to the page's scripts if so.</p>
+             <p>A tooltip for <code>document</code>, not yet in it, whose content is styled within its shadow root by the CSS <code>styles</code>, as <code>.card { padding: 8px }</code>, and by <code>sheets</code>, made for <code>document</code>, and which the pointer may move onto and use, unless not <code>interactive</code>, when it is named <code>label</code>, as for a reader of the screen. Its shadow root is <code>closed</code> to the page's scripts if so. It opens where there is room for it to be <code>reserve</code> tall, if it is not already, as for an entry that will fill it, in pixels.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>A tooltip for <code>document</code>, not yet in it, whose content is styled within its shadow root by the CSS <code>styles</code>, as <code>.card { padding: 8px }</code>, and by <code>sheets</code>, made for <code>document</code>, and which the pointer may move onto and use, unless not <code>interactive</code>, when it is named <code>label</code>, as for a reader of the screen. Its shadow root is <code>closed</code> to the page's scripts if so.</p>
+              <p>A tooltip for <code>document</code>, not yet in it, whose content is styled within its shadow root by the CSS <code>styles</code>, as <code>.card { padding: 8px }</code>, and by <code>sheets</code>, made for <code>document</code>, and which the pointer may move onto and use, unless not <code>interactive</code>, when it is named <code>label</code>, as for a reader of the screen. Its shadow root is <code>closed</code> to the page's scripts if so. It opens where there is room for it to be <code>reserve</code> tall, if it is not already, as for an entry that will fill it, in pixels.</p>
               <p>The page's own rules for every element, as <code>* { padding: 0 }</code>, outweigh rules for the host, <code>:host</code>, unless those are marked <code>!important</code>, as its own are; so mark those of <code>styles</code> too, but never <code>top</code>, <code>left</code> or <code>all</code>, which would then outweigh where it is placed.</p>
              </div>
              <h2 class="h200">Attributes</h2>

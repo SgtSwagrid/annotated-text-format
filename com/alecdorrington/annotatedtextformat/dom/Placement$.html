@@ -85,6 +85,34 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
+        <div class="documentableElement" id="around-fffff1f0">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#around-fffff1f0" t="n" class="documentableName ">around</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">line</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">tip</span>: <a href="Box.html" t="t">Box</a>): <span data-unresolved-link="" t="t">List</span>[(<span data-unresolved-link="" t="t">Double</span>, <span data-unresolved-link="" t="t">Double</span>)]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The corners of the smallest convex shape holding both <code>line</code> and <code>tip</code>, in order around it, over which the pointer crosses from one to the other; or the one point that both are, if they are empty there.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The corners of the smallest convex shape holding both <code>line</code> and <code>tip</code>, in order around it, over which the pointer crosses from one to the other; or the one point that both are, if they are empty there.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small"></dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="between-95f">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -105,6 +133,34 @@ node3 -> node2;
             <div class="cover">
              <div class="doc">
               <p>The gap between <code>line</code> and <code>tip</code>, placed for it, which the pointer crosses from one to the other: from the edge of one to the edge of the other, and as wide as both together; or none if they touch or overlap, as a tip too tall for the window may.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small"></dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="crossing-95f">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#crossing-95f" t="n" class="documentableName ">crossing</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">line</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">tip</span>: <a href="Box.html" t="t">Box</a>): <span data-unresolved-link="" t="t">Option</span>[(<a href="Box.html" t="t">Box</a>, <span data-unresolved-link="" t="t">String</span>)]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>What covers the way from <code>line</code> to <code>tip</code>, placed for it, so that nothing beneath catches the pointer crossing from one to the other: the box holding both, and within it, as an SVG path to fill by the even-odd rule, the smallest convex shape holding both, but each of them, measured from the box's corner; or none if they touch or overlap, as a tip too tall for the window may. Neither is covered, so that each takes the pointer itself, as a link that the line is in must, and the tip's own buttons.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>What covers the way from <code>line</code> to <code>tip</code>, placed for it, so that nothing beneath catches the pointer crossing from one to the other: the box holding both, and within it, as an SVG path to fill by the even-odd rule, the smallest convex shape holding both, but each of them, measured from the box's corner; or none if they touch or overlap, as a tip too tall for the window may. Neither is covered, so that each takes the pointer itself, as a link that the line is in must, and the tip's own buttons.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small"></dl>
@@ -141,12 +197,12 @@ node3 -> node2;
           </div>
          </div>
         </div>
-        <div class="documentableElement" id="place-ffffff45">
+        <div class="documentableElement" id="place-19b">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#place-ffffff45" t="n" class="documentableName ">place</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">line</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">tip</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">viewport</span>: <a href="Box.html" t="t">Box</a>): (<a href="Box.html" t="t">Box</a>, <a href="Side.html" t="t">Side</a>)
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#place-19b" t="n" class="documentableName ">place</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">line</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">tip</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">viewport</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">side</span>: <span data-unresolved-link="" t="t">Option</span>[<a href="Side.html" t="t">Side</a>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">reserve</span>: <span data-unresolved-link="" t="t">Double</span> = ...): (<a href="Box.html" t="t">Box</a>, <a href="Side.html" t="t">Side</a>)
            </div>
           </div>
          </div>
@@ -156,11 +212,67 @@ node3 -> node2;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Where <code>tip</code> goes for <code>line</code> within <code>viewport</code>: centred over the line, kept within the viewport's sides; above it if there is room there, or else below it if there is room there; or else on the side with more room, kept within the viewport, over which a tip too tall for both scrolls.</p>
+             <p>Where <code>tip</code> goes for <code>line</code> within <code>viewport</code>: centred over the line, kept within the viewport's sides; on <code>side</code> of it, if given; or else above it if there is room there for it, and for <code>reserve</code> if that is taller, as for content to come, or else below it if there is room there; or else on the side with more room, kept within the viewport, over which a tip too tall for both scrolls.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Where <code>tip</code> goes for <code>line</code> within <code>viewport</code>: centred over the line, kept within the viewport's sides; above it if there is room there, or else below it if there is room there; or else on the side with more room, kept within the viewport, over which a tip too tall for both scrolls.</p>
+              <p>Where <code>tip</code> goes for <code>line</code> within <code>viewport</code>: centred over the line, kept within the viewport's sides; on <code>side</code> of it, if given; or else above it if there is room there for it, and for <code>reserve</code> if that is taller, as for content to come, or else below it if there is room there; or else on the side with more room, kept within the viewport, over which a tip too tall for both scrolls.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small"></dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="room-fffff9ea">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#room-fffff9ea" t="n" class="documentableName ">room</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">line</span>: <a href="Box.html" t="t">Box</a>, <span t="k"></span><span data-unresolved-link="" t="n">side</span>: <a href="Side.html" t="t">Side</a>, <span t="k"></span><span data-unresolved-link="" t="n">viewport</span>: <a href="Box.html" t="t">Box</a>): <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>How tall a tip may be on <code>side</code> of <code>line</code> within <code>viewport</code>, standing off the line and keeping from the viewport's edge.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>How tall a tip may be on <code>side</code> of <code>line</code> within <code>viewport</code>, standing off the line and keeping from the viewport's edge.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small"></dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="within-fffff1dc">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Placement$.html#within-fffff1dc" t="n" class="documentableName ">within</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">corners</span>: <span data-unresolved-link="" t="t">List</span>[(<span data-unresolved-link="" t="t">Double</span>, <span data-unresolved-link="" t="t">Double</span>)], <span t="k"></span><span data-unresolved-link="" t="n">x</span>: <span data-unresolved-link="" t="t">Double</span>, <span t="k"></span><span data-unresolved-link="" t="n">y</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Whether <code>(x, y)</code> lies within the convex shape whose corners are <code>corners</code>, in order around it, or on its edge; or, if it has no area, as the hull of two empty boxes, within the box holding its corners, if any.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Whether <code>(x, y)</code> lies within the convex shape whose corners are <code>corners</code>, in order around it, or on its edge; or, if it has no area, as the hull of two empty boxes, within the box holding its corners, if any.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small"></dl>
